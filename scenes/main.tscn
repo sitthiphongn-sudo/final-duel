@@ -1,0 +1,80 @@
+[gd_scene format=3 uid="uid://c66ayc3b50fl"]
+
+[ext_resource type="Script" uid="uid://vfiojgaekqfu" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" uid="uid://wunqjualhj4n" path="res://Meshy_AI_Skyborne_Ruins_0920051107_texture.glb" id="2_map"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="4_enemy"]
+[ext_resource type="Shader" uid="uid://b0era1yde52e0" path="res://vfx/sky_clouds.gdshader" id="5_sky"]
+
+[sub_resource type="ShaderMaterial" id="SkyShader_1"]
+shader = ExtResource("5_sky")
+shader_parameter/zenith_color = Color(0.16, 0.34, 0.66, 1)
+shader_parameter/horizon_color = Color(0.74, 0.72, 0.66, 1)
+shader_parameter/sun_glow_color = Color(1, 0.72, 0.42, 1)
+shader_parameter/horizon_softness = 0.35
+shader_parameter/sun_size = 0.9994
+shader_parameter/sun_glow = 6.0
+shader_parameter/exposure = 1.0
+shader_parameter/cloud_color = Color(1, 0.98, 0.95, 1)
+shader_parameter/cloud_shadow_color = Color(0.42, 0.46, 0.56, 1)
+shader_parameter/cloud_coverage = 0.48
+shader_parameter/cloud_softness = 0.18
+shader_parameter/cloud_scale = 0.9
+shader_parameter/cloud_speed = 0.012
+shader_parameter/wind_dir = Vector2(1, 0.35)
+shader_parameter/cloud_sea = true
+shader_parameter/sea_coverage = 0.55
+shader_parameter/sea_scale = 0.6
+shader_parameter/sea_depth_color = Color(0.26, 0.32, 0.46, 1)
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("SkyShader_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+ambient_light_source = 2
+ambient_light_color = Color(0.6, 0.6, 0.64, 1)
+ambient_light_sky_contribution = 0.55
+ambient_light_energy = 0.7
+reflected_light_source = 1
+tonemap_mode = 4
+tonemap_exposure = 1.1
+glow_enabled = true
+glow_intensity = 0.4
+glow_bloom = 0.05
+fog_enabled = true
+fog_light_color = Color(0.74, 0.72, 0.68, 1)
+fog_light_energy = 0.8
+fog_sun_scatter = 0.25
+fog_density = 0.004
+fog_aerial_perspective = 0.4
+fog_sky_affect = 0.15
+adjustment_enabled = true
+adjustment_contrast = 1.08
+adjustment_saturation = 1.05
+
+[node name="Main" type="Node3D" unique_id=1121530406]
+script = ExtResource("1_main")
+map_brightness = 0.476
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1054391717]
+environment = SubResource("Environment_1")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1610018528]
+transform = Transform3D(-0.8192, 0, -0.5736, -0.3039, 0.848, 0.4341, 0.4864, 0.5299, -0.6947, 0, 30, 0)
+light_color = Color(1, 0.86, 0.68, 1)
+light_energy = 1.7
+light_angular_distance = 1.0
+shadow_enabled = true
+shadow_blur = 1.5
+directional_shadow_max_distance = 60.0
+
+[node name="Map" parent="." unique_id=1080588456 instance=ExtResource("2_map")]
+transform = Transform3D(30, 0, 0, 0, 30, 0, 0, 0, 30, 0, -3.95, 0)
+
+[node name="Player" parent="." unique_id=106730032 instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+
+[node name="Enemy" parent="." unique_id=1286903948 instance=ExtResource("4_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -4)

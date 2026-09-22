@@ -1,0 +1,177 @@
+extends RefCounted
+## ข้อมูลตัวละครทั้งหมด + ตัวที่ถูกเลือก (ใช้ร่วมกันระหว่างฉากเลือกตัวละครกับฉากต่อสู้)
+## ใช้แบบ: const GameState := preload("res://scripts/game_state.gd") แล้วเรียก GameState.p1 / GameState.data(id)
+## เพิ่มตัวละครใหม่ = เพิ่ม entry ใน CHARACTERS แล้วจะโผล่ในฉากเลือกตัวละครเอง
+
+static var p1 := "emberclaw"          ## ตัวที่ผู้เล่นเลือก
+static var p2 := "frostfang"          ## คู่ต่อสู้ (บอท)
+static var game_live := true         ## false = ฉากเกมกำลังถูกเตรียมอยู่ใต้หน้า VS (ยังไม่เปิดเสียง/เสียงพูด)
+
+const ORDER := ["emberclaw", "frostfang"]
+
+## ฉากต่อสู้ + ชื่อแมพ (แสดงในหน้า VS ตอนโหลด)
+const BATTLE_SCENE := "res://scenes/main.tscn"
+const MAP_NAME := "Skyborne Ruins"
+const MAP_BG := "res://ui/vs/bg_skyborne.jpg"
+
+## ข้อมูลแมพ (หน้า MAPS ในเมนู)
+const MAPS := [
+	{
+		"name": "SKYBORNE RUINS",
+		"image": "res://ui/vs/bg_skyborne.jpg",
+		"location": "Floating isles above the Cloud Sea",
+		"mode": "1v1 Duel",
+		"size": "Medium · Circular stone arena",
+		"time": "Golden afternoon",
+		"hazards": "Open edges · Fall and you respawn",
+		"desc": "An ancient temple ring that drifted into the sky long ago. Broken pillars circle a carved seal where the guardians settle their duels, high above an endless sea of clouds.",
+	},
+]
+
+const CHARACTERS := {
+	"emberclaw": {
+		"name": "EMBERCLAW",
+		"title": "Guardian of the Flame",
+		"desc": "Born in the heart of a dying volcano, Emberclaw fights up close and never backs down. He chains blazing five-hit combos into a sky-splitting air rush, then drives his foes back into the stone.",
+		"style": "Rushdown · Close range",
+		"element": "fire",
+		"walk_glb": "res://characters/emberclaw/Meshy_AI_Emberclaw_Guardian_biped_Animation_Walking_withSkin.glb",
+		"run_glb": "res://characters/emberclaw/Meshy_AI_Emberclaw_Guardian_biped_Animation_Running_withSkin.glb",
+		"portrait": "res://ui/portrait_fire.png",
+		"card": "res://ui/card_emberclaw.png",
+		"vs_l": "res://ui/vs/emberclaw_l.png", "vs_r": "res://ui/vs/emberclaw_r.png",
+		"hp": 2000, "atk": 23,
+		"color": Color(1.0, 0.45, 0.18),
+		"vfx_color": Color(1.0, 0.62, 0.25),
+		"hp_color": Color(0.90, 0.16, 0.10),
+		"ex_name": "FURY", "ex_color": Color(1.0, 0.52, 0.10),
+		"flipbook": "res://vfx/fire_flipbook_8x8.png",
+		"fire": [Color(1.0, 0.95, 0.75), Color(1.0, 0.55, 0.12), Color(0.85, 0.2, 0.03), Color(1.0, 0.8, 0.4), Color(1.0, 0.52, 0.18)],
+		"abilities": [
+			["LMB", "×5", "Blazing Five-Strike"],
+			["K", "", "Rising Flame Kick"],
+			["Q", "", "Ember Warp"],
+			["R", "", "Inferno Rush"],
+		],
+		"physical": [95, 90, 100],
+		"elemental": [50, 120, 100, 100, 95, 115],
+	},
+	"frostfang": {
+		"name": "FROSTFANG",
+		"title": "Guardian of the Glacier",
+		"desc": "The silent keeper of the frozen peaks. Frostfang is patient and cold, blocking more often than he strikes and punishing every mistake with a storm of ice-blue fists.",
+		"style": "Counter · Defensive",
+		"element": "ice",
+		"walk_glb": "res://characters/frostfang/Meshy_AI_Frostfang_Guardian_biped_Animation_Walking_withSkin.glb",
+		"run_glb": "res://characters/frostfang/Meshy_AI_Frostfang_Guardian_biped_Animation_Running_withSkin.glb",
+		"portrait": "res://ui/portrait_ice.png",
+		"card": "res://ui/card_frostfang.png",
+		"vs_l": "res://ui/vs/frostfang_l.png", "vs_r": "res://ui/vs/frostfang_r.png",
+		"hp": 2200, "atk": 21,
+		"color": Color(0.35, 0.72, 1.0),
+		"vfx_color": Color(0.35, 0.72, 1.0),
+		"hp_color": Color(0.16, 0.48, 0.95),
+		"ex_name": "MAGIC", "ex_color": Color(0.35, 0.82, 1.0),
+		"flipbook": "res://vfx/fire_flipbook_blue_8x8.png",
+		"fire": [Color(0.85, 0.97, 1.0), Color(0.18, 0.62, 1.0), Color(0.06, 0.22, 0.75), Color(0.6, 0.92, 1.0), Color(0.25, 0.6, 1.0)],
+		"abilities": [
+			["LMB", "×5", "Frost Fang Barrage"],
+			["K", "", "Glacier Kick"],
+			["Q", "", "Blizzard Warp"],
+			["R", "", "Absolute Zero Rush"],
+		],
+		"physical": [100, 95, 95],
+		"elemental": [120, 50, 105, 100, 100, 90],
+	},
+}
+
+## ชื่อไอคอนในแผงสถานะ (ui/icons/<name>.png)
+const PHYSICAL_ICONS := ["strike", "slash", "guard"]
+const ELEMENT_ICONS := ["fire", "ice", "bolt", "wind", "earth", "water"]
+
+## บอทโหดกว่าผู้เล่นนิดหน่อย (คูณดาเมจ)
+const BOT_DAMAGE_MULT := 1.25
+
+
+static func data(id: String) -> Dictionary:
+	return CHARACTERS.get(id, CHARACTERS["emberclaw"])
+
+
+## เลือกคู่ต่อสู้ให้อัตโนมัติ (ตัวอื่นที่ไม่ใช่ตัวที่เลือก, สุ่มถ้ามีหลายตัว)
+static func pick_opponent(me: String) -> String:
+	var pool: Array = []
+	for id in ORDER:
+		if id != me:
+			pool.append(id)
+	return pool.pick_random() if not pool.is_empty() else me
+
+
+## เปลี่ยนโมเดลของตัวละคร (node ชื่อ Model) ให้เป็นตัวที่ต้องการ ก่อนสร้างแอนิเมชัน
+static func swap_model(owner: Node3D, old_model: Node3D, id: String) -> Node3D:
+	var d := data(id)
+	var scene_path: String = old_model.scene_file_path
+	if scene_path == d["walk_glb"]:
+		return old_model
+	var ps := load(d["walk_glb"]) as PackedScene
+	if ps == null:
+		return old_model
+	var m := ps.instantiate() as Node3D
+	var idx := old_model.get_index()
+	m.transform = old_model.transform
+	owner.remove_child(old_model)
+	old_model.queue_free()
+	m.name = "Model"
+	owner.add_child(m)
+	owner.move_child(m, idx)
+	return m
+
+# ================= ตั้งค่าเสียง (บันทึกใน user://settings.cfg) =================
+
+const SETTINGS_PATH := "user://settings.cfg"
+const AUDIO_DEFAULTS := {"master": 0.8, "music": 0.75, "sfx": 0.9}
+static var audio := {"master": 0.8, "music": 0.75, "sfx": 0.9}
+static var _settings_ready := false
+
+
+## เรียกตอนเริ่มฉากใดก็ได้ (ครั้งแรกจะโหลดค่าจากไฟล์ + สร้าง bus + ใช้ค่า)
+static func init_settings() -> void:
+	ensure_audio_buses()
+	if not _settings_ready:
+		_settings_ready = true
+		var cfg := ConfigFile.new()
+		if cfg.load(SETTINGS_PATH) == OK:
+			for k in AUDIO_DEFAULTS:
+				audio[k] = clampf(float(cfg.get_value("audio", k, AUDIO_DEFAULTS[k])), 0.0, 1.0)
+	apply_audio()
+
+
+## bus เสียง: Master > Music (เพลง), SFX (เอฟเฟกต์ + เสียงพูด)
+static func ensure_audio_buses() -> void:
+	for bus_name in ["Music", "SFX"]:
+		if AudioServer.get_bus_index(bus_name) == -1:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, bus_name)
+			AudioServer.set_bus_send(i, "Master")
+
+
+static func apply_audio() -> void:
+	var map := {"master": "Master", "music": "Music", "sfx": "SFX"}
+	for k in map:
+		var i := AudioServer.get_bus_index(map[k])
+		if i >= 0:
+			var v: float = audio[k]
+			AudioServer.set_bus_mute(i, v <= 0.001)
+			AudioServer.set_bus_volume_db(i, linear_to_db(maxf(v, 0.001)))
+
+
+static func set_volume(key: String, v: float) -> void:
+	audio[key] = clampf(v, 0.0, 1.0)
+	apply_audio()
+
+
+static func save_settings() -> void:
+	var cfg := ConfigFile.new()
+	for k in audio:
+		cfg.set_value("audio", k, audio[k])
+	cfg.save(SETTINGS_PATH)
