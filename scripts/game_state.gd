@@ -35,8 +35,8 @@ const CHARACTERS := {
 		"desc": "Born in the heart of a dying volcano, Emberclaw fights up close and never backs down. He chains blazing five-hit combos into a sky-splitting air rush, then drives his foes back into the stone.",
 		"style": "Rushdown · Close range",
 		"element": "fire",
-		"walk_glb": "res://characters/emberclaw/Meshy_AI_Emberclaw_Guardian_biped_Animation_Walking_withSkin.glb",
-		"run_glb": "res://characters/emberclaw/Meshy_AI_Emberclaw_Guardian_biped_Animation_Running_withSkin.glb",
+		"walk_glb": "res://lite/characters/emberclaw.tscn",
+		"run_glb": "res://lite/characters/emberclaw_run_anim.res",
 		"portrait": "res://ui/portrait_fire.png",
 		"card": "res://ui/card_emberclaw.png",
 		"vs_l": "res://ui/vs/emberclaw_l.png", "vs_r": "res://ui/vs/emberclaw_r.png",
@@ -48,7 +48,7 @@ const CHARACTERS := {
 		"flipbook": "res://vfx/fire_flipbook_8x8.png",
 		"fire": [Color(1.0, 0.95, 0.75), Color(1.0, 0.55, 0.12), Color(0.85, 0.2, 0.03), Color(1.0, 0.8, 0.4), Color(1.0, 0.52, 0.18)],
 		"abilities": [
-			["LMB", "×5", "Blazing Five-Strike"],
+			["J", "×5", "Blazing Five-Strike"],
 			["K", "", "Rising Flame Kick"],
 			["Q", "", "Ember Warp"],
 			["R", "", "Inferno Rush"],
@@ -62,8 +62,8 @@ const CHARACTERS := {
 		"desc": "The silent keeper of the frozen peaks. Frostfang is patient and cold, blocking more often than he strikes and punishing every mistake with a storm of ice-blue fists.",
 		"style": "Counter · Defensive",
 		"element": "ice",
-		"walk_glb": "res://characters/frostfang/Meshy_AI_Frostfang_Guardian_biped_Animation_Walking_withSkin.glb",
-		"run_glb": "res://characters/frostfang/Meshy_AI_Frostfang_Guardian_biped_Animation_Running_withSkin.glb",
+		"walk_glb": "res://lite/characters/frostfang.tscn",
+		"run_glb": "res://lite/characters/frostfang_run_anim.res",
 		"portrait": "res://ui/portrait_ice.png",
 		"card": "res://ui/card_frostfang.png",
 		"vs_l": "res://ui/vs/frostfang_l.png", "vs_r": "res://ui/vs/frostfang_r.png",
@@ -75,7 +75,7 @@ const CHARACTERS := {
 		"flipbook": "res://vfx/fire_flipbook_blue_8x8.png",
 		"fire": [Color(0.85, 0.97, 1.0), Color(0.18, 0.62, 1.0), Color(0.06, 0.22, 0.75), Color(0.6, 0.92, 1.0), Color(0.25, 0.6, 1.0)],
 		"abilities": [
-			["LMB", "×5", "Frost Fang Barrage"],
+			["J", "×5", "Frost Fang Barrage"],
 			["K", "", "Glacier Kick"],
 			["Q", "", "Blizzard Warp"],
 			["R", "", "Absolute Zero Rush"],
@@ -89,12 +89,73 @@ const CHARACTERS := {
 const PHYSICAL_ICONS := ["strike", "slash", "guard"]
 const ELEMENT_ICONS := ["fire", "ice", "bolt", "wind", "earth", "water"]
 
-## บอทโหดกว่าผู้เล่นนิดหน่อย (คูณดาเมจ)
-const BOT_DAMAGE_MULT := 1.25
+## ชื่อปุ่ม (แสดงบนจอ) ของผู้เล่นแต่ละคน
+const CONTROLS_TEXT := {
+	1: "P1   WASD move · Space jump · J punch · K kick · L block · Q dash · R ultimate · Shift run",
+	2: "P2   Arrows move · Num0 jump · Num1 punch · Num2 kick · Num3 block · Num4 dash · Num5 ultimate · NumEnter run",
+}
 
 
 static func data(id: String) -> Dictionary:
 	return CHARACTERS.get(id, CHARACTERS["emberclaw"])
+
+
+## ปุ่มของผู้เล่น 2 คน (คีย์บอร์ดเดียวกัน + จอยคนละตัว) สร้างครั้งเดียว
+##   P1: WASD เดิน | Space กระโดด | J ต่อย | K เตะ | L บล็อก | Q Dash | R อัลติเมต | Shift ซ้าย วิ่ง
+##   P2: ลูกศร เดิน | Num0 กระโดด | Num1 ต่อย | Num2 เตะ | Num3 บล็อก | Num4 Dash | Num5 อัลติเมต | Num Enter วิ่ง
+##       (โน้ตบุ๊กไม่มี Numpad: Ctrl ขวา กระโดด | , ต่อย | . เตะ | / บล็อก | ; Dash | ' อัลติเมต | Shift ขวา วิ่ง)
+##   จอย: ตัวแรก = P1, ตัวที่สอง = P2 (A กระโดด, X ต่อย, Y เตะ, RB บล็อก, B Dash, RT อัลติเมต, LB วิ่ง)
+static func setup_inputs() -> void:
+	if InputMap.has_action("p1_punch"):
+		return
+	var L := KEY_LOCATION_LEFT
+	var R := KEY_LOCATION_RIGHT
+	var keys := {
+		1: {
+			"move_forward": [KEY_W], "move_back": [KEY_S], "move_left": [KEY_A], "move_right": [KEY_D],
+			"run": [[KEY_SHIFT, L]], "jump": [KEY_SPACE], "punch": [KEY_J], "kick": [KEY_K],
+			"block": [KEY_L], "dash": [KEY_Q], "ultimate": [KEY_R],
+		},
+		2: {
+			"move_forward": [KEY_UP], "move_back": [KEY_DOWN], "move_left": [KEY_LEFT], "move_right": [KEY_RIGHT],
+			"run": [KEY_KP_ENTER, [KEY_SHIFT, R]], "jump": [KEY_KP_0, [KEY_CTRL, R]],
+			"punch": [KEY_KP_1, KEY_COMMA], "kick": [KEY_KP_2, KEY_PERIOD], "block": [KEY_KP_3, KEY_SLASH],
+			"dash": [KEY_KP_4, KEY_SEMICOLON], "ultimate": [KEY_KP_5, KEY_APOSTROPHE],
+		},
+	}
+	var pads := {
+		"jump": JOY_BUTTON_A, "punch": JOY_BUTTON_X, "kick": JOY_BUTTON_Y, "dash": JOY_BUTTON_B,
+		"block": JOY_BUTTON_RIGHT_SHOULDER, "run": JOY_BUTTON_LEFT_SHOULDER,
+		"move_forward": JOY_BUTTON_DPAD_UP, "move_back": JOY_BUTTON_DPAD_DOWN,
+		"move_left": JOY_BUTTON_DPAD_LEFT, "move_right": JOY_BUTTON_DPAD_RIGHT,
+	}
+	var sticks := {"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0],
+		"move_forward": [JOY_AXIS_LEFT_Y, -1.0], "move_back": [JOY_AXIS_LEFT_Y, 1.0],
+		"ultimate": [JOY_AXIS_TRIGGER_RIGHT, 1.0]}
+	for pi in keys:
+		var dev: int = pi - 1
+		for a in keys[pi]:
+			var act := "p%d_%s" % [pi, a]
+			InputMap.add_action(act, 0.3)
+			for k in keys[pi][a]:
+				var ev := InputEventKey.new()
+				if k is Array:
+					ev.physical_keycode = k[0]
+					ev.location = k[1]
+				else:
+					ev.physical_keycode = k
+				InputMap.action_add_event(act, ev)
+			if pads.has(a):
+				var jb := InputEventJoypadButton.new()
+				jb.device = dev
+				jb.button_index = pads[a]
+				InputMap.action_add_event(act, jb)
+			if sticks.has(a):
+				var jm := InputEventJoypadMotion.new()
+				jm.device = dev
+				jm.axis = sticks[a][0]
+				jm.axis_value = sticks[a][1]
+				InputMap.action_add_event(act, jm)
 
 
 ## เลือกคู่ต่อสู้ให้อัตโนมัติ (ตัวอื่นที่ไม่ใช่ตัวที่เลือก, สุ่มถ้ามีหลายตัว)
@@ -135,6 +196,7 @@ static var _settings_ready := false
 
 ## เรียกตอนเริ่มฉากใดก็ได้ (ครั้งแรกจะโหลดค่าจากไฟล์ + สร้าง bus + ใช้ค่า)
 static func init_settings() -> void:
+	setup_fonts()
 	ensure_audio_buses()
 	if not _settings_ready:
 		_settings_ready = true
@@ -143,6 +205,19 @@ static func init_settings() -> void:
 			for k in AUDIO_DEFAULTS:
 				audio[k] = clampf(float(cfg.get_value("audio", k, AUDIO_DEFAULTS[k])), 0.0, 1.0)
 	apply_audio()
+
+
+## ฟอนต์หลักไม่มีตัวอักษรไทย -> ใช้ Loma เป็นฟอนต์สำรอง (ชื่อผู้พัฒนาในเครดิต ฯลฯ)
+static func setup_fonts() -> void:
+	var thai := load("res://fonts/Loma.otf") as Font
+	if thai == null:
+		return
+	for path in ["res://fonts/MPLUSRounded1c-Medium.woff2", "res://fonts/BarlowCondensed-BoldItalic.woff2"]:
+		var f := load(path) as Font
+		if f and not f.fallbacks.has(thai):
+			var fb := f.fallbacks.duplicate()
+			fb.append(thai)
+			f.fallbacks = fb
 
 
 ## bus เสียง: Master > Music (เพลง), SFX (เอฟเฟกต์ + เสียงพูด)

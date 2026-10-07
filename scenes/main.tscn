@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://c66ayc3b50fl"]
 
 [ext_resource type="Script" uid="uid://vfiojgaekqfu" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" uid="uid://wunqjualhj4n" path="res://Meshy_AI_Skyborne_Ruins_0920051107_texture.glb" id="2_map"]
+[ext_resource type="PackedScene" path="res://lite/map/skyborne_ruins.tscn" id="2_map"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
-[ext_resource type="PackedScene" path="res://scenes/enemy.tscn" id="4_enemy"]
+[ext_resource type="Script" path="res://scripts/fight_camera.gd" id="4_cam"]
 [ext_resource type="Shader" uid="uid://b0era1yde52e0" path="res://vfx/sky_clouds.gdshader" id="5_sky"]
 
 [sub_resource type="ShaderMaterial" id="SkyShader_1"]
@@ -68,13 +68,17 @@ light_energy = 1.7
 light_angular_distance = 1.0
 shadow_enabled = true
 shadow_blur = 1.5
-directional_shadow_max_distance = 60.0
+directional_shadow_max_distance = 40.0
 
 [node name="Map" parent="." unique_id=1080588456 instance=ExtResource("2_map")]
 transform = Transform3D(30, 0, 0, 0, 30, 0, 0, 0, 30, 0, -3.95, 0)
 
-[node name="Player" parent="." unique_id=106730032 instance=ExtResource("3_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+[node name="Player1" parent="." unique_id=106730032 instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 2.2)
 
-[node name="Enemy" parent="." unique_id=1286903948 instance=ExtResource("4_enemy")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -4)
+[node name="Player2" parent="." unique_id=1286903948 instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -2.2)
+player_index = 2
+
+[node name="FightCamera" type="Camera3D" parent="."]
+script = ExtResource("4_cam")

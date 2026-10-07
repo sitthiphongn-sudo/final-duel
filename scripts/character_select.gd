@@ -1,7 +1,7 @@
 extends Node3D
-## ฉากเลือกตัวละคร (สไตล์ Jump Force): โมเดล 3D ตรงกลาง, แผงสถานะขวา, ช่องทีมซ้าย (1 ช่อง = 1v1),
-## แถบรูปตัวละครด้านล่าง (+ช่องสุ่ม), ปุ่ม EXIT กลับเมนู
-## ควบคุม: เมาส์ชี้/คลิก หรือ ←/→ (A/D) เลือก | Enter/Space หรือคลิกซ้ำ = ยืนยัน | Esc = ออก | ลากเมาส์บนตัวละคร = หมุนดู
+## ฉากเลือกตัวละคร (สไตล์ Jump Force) สำหรับ 2 คน: P1 เลือกก่อน แล้ว P2 เลือก (เลือกตัวซ้ำกันได้)
+## โมเดล 3D ตรงกลาง, แผงสถานะขวา, ช่อง P1/P2 ซ้ายบน, แถบรูปตัวละครด้านล่าง (+ช่องสุ่ม), ปุ่ม EXIT กลับเมนู
+## ควบคุม: เมาส์ชี้/คลิก หรือ A/D, ←/→ เลือก | Enter/Space/J/Num1 หรือคลิกซ้ำ = ยืนยัน | Esc = ย้อนกลับ | ลากเมาส์ = หมุนดู
 
 const GameState := preload("res://scripts/game_state.gd")
 const FighterRig := preload("res://scripts/fighter_rig.gd")
@@ -53,7 +53,8 @@ var stats_box: VBoxContainer
 var name_label: Label
 var title_label: Label
 var element_label: Label
-var diamond
+var diamonds: Array = []            # ช่อง P1, P2
+var phase := 1                      # ตอนนี้ผู้เล่นคนไหนกำลังเลือก
 var vs_label: Label
 var toast: Label
 var fade: ColorRect
@@ -309,15 +310,23 @@ func _build_team() -> void:
 	ht.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	head.add_child(ht)
 
-	diamond = DiamondSlot.new()
-	diamond.position = Vector2(20 + 125 - 42, 112)
-	diamond.size = Vector2(84, 84)
-	ui.add_child(diamond)
-	var p1 := _label("P1", 17, C_TEXT, true, 4)
-	p1.position = Vector2(20 + 125 - 40, 198)
-	p1.size = Vector2(80, 24)
-	p1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ui.add_child(p1)
+	for i in 2:
+		var cx := 20.0 + 62.0 + i * 126.0
+		var dm := DiamondSlot.new()
+		dm.position = Vector2(cx - 42, 112)
+		dm.size = Vector2(84, 84)
+		ui.add_child(dm)
+		diamonds.append(dm)
+		var pl := _label("P%d" % (i + 1), 17, C_TEXT, true, 4)
+		pl.position = Vector2(cx - 40, 198)
+		pl.size = Vector2(80, 24)
+		pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ui.add_child(pl)
+	var vs := _label("VS", 18, C_GOLD, true, 4)
+	vs.position = Vector2(20 + 125 - 20, 140)
+	vs.size = Vector2(40, 24)
+	vs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ui.add_child(vs)
 	vs_label = _label("", 12, C_TEXT_DIM)
 	vs_label.position = Vector2(20, 226)
 	vs_label.size = Vector2(250, 20)
@@ -506,7 +515,7 @@ func _build_strip() -> void:
 		row.add_child(c)
 		cards.append(c)
 
-	var hint := _label("←/→  เลือก      Enter  ยืนยัน      Esc  ออก", 12, C_TEXT_DIM)
+	var hint := _label("A / D  Select      Enter  Confirm      Esc  Back", 12, C_TEXT_DIM)
 	hint.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
 	hint.position = Vector2(-330, -30)
 	hint.size = Vector2(310, 20)
@@ -543,7 +552,7 @@ func _show_character(instant: bool) -> void:
 	var d: Dictionary = GameState.data(real)
 	if id == "random":
 		name_label.text = "RANDOM"
-		title_label.text = "สุ่มตัวละคร"
+		title_label.text = "Random fighter"
 		element_label.text = "?"
 		element_label.add_theme_color_override("font_color", C_CYAN)
 	else:
@@ -552,9 +561,9 @@ func _show_character(instant: bool) -> void:
 		element_label.text = "◆ " + ("FIRE" if d["element"] == "fire" else "ICE")
 		element_label.add_theme_color_override("font_color", d["color"])
 	_fill_stats(d, id == "random")
-	diamond.tex = null if id == "random" else load(d["portrait"])
-	diamond.queue_redraw()
-	vs_label.text = "VS  %s  (CPU)" % GameState.data(GameState.pick_opponent(real))["name"] if id != "random" else "VS  ???  (CPU)"
+	diamonds[phase - 1].tex = null if id == "random" else load(d["portrait"])
+	diamonds[phase - 1].queue_redraw()
+	vs_label.text = "PLAYER %d  —  CHOOSE YOUR FIGHTER" % phase
 	rim_light.light_color = d["color"]
 	(floor_glow.mesh.material as StandardMaterial3D).albedo_color = d["color"].lerp(Color(0.4, 0.9, 1.0), 0.5)
 	bg_mat.set_shader_parameter("accent", d["color"])
@@ -596,23 +605,27 @@ func _confirm() -> void:
 		for i in cards.size():
 			cards[i].selected = i == ids.find(id)
 			cards[i].queue_redraw()
-	GameState.p1 = id
-	GameState.p2 = GameState.pick_opponent(id)
 	var d: Dictionary = GameState.data(id)
-	diamond.tex = load(d["portrait"])
-	diamond.locked = true
-	diamond.queue_redraw()
+	var dm = diamonds[phase - 1]
+	dm.tex = load(d["portrait"])
+	dm.locked = true
+	dm.queue_redraw()
 	name_label.text = d["name"]
-	vs_label.text = "VS  %s  (CPU)" % GameState.data(GameState.p2)["name"]
+	if phase == 1:
+		# P1 เลือกแล้ว -> ถึงตา P2 (เคอร์เซอร์ไปที่ตัวอื่นให้ก่อน)
+		GameState.p1 = id
+		_sfx(SFX_CONFIRM, -8.0, 1.3)
+		_pose(id)
+		phase = 2
+		locked = false
+		cursor = maxi(0, ids.find(GameState.pick_opponent(id)))
+		_show_character(false)
+		return
+	GameState.p2 = id
+	vs_label.text = "%s  VS  %s" % [GameState.data(GameState.p1)["name"], d["name"]]
 	_sfx(SFX_CONFIRM, -4.0, 1.1)
 	# ท่าโพสยืนยัน: เสยหมัด + ไฟลุก + จอวาบ
-	var e: Dictionary = models[id]
-	if e["anim"] and e["anim"].has_animation("Punch3"):
-		e["anim"].play("Punch3", 0.05)
-		e["anim"].queue("FightIdle")
-	for f in ["fire_l", "fire_r"]:
-		if e[f]:
-			e[f].boost(1.5)
+	_pose(id)
 	var flash := ColorRect.new()
 	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
 	flash.color = Color(d["color"].r, d["color"].g, d["color"].b, 0.45)
@@ -630,8 +643,29 @@ func _confirm() -> void:
 	tc.tween_callback(func(): get_tree().change_scene_to_file(battle_scene))
 
 
+## ท่าโพสยืนยัน: เสยหมัด + ไฟลุก
+func _pose(id: String) -> void:
+	var e: Dictionary = models[id]
+	if e["anim"] and e["anim"].has_animation("Punch3"):
+		e["anim"].play("Punch3", 0.05)
+		e["anim"].queue("FightIdle")
+	for f in ["fire_l", "fire_r"]:
+		if e[f]:
+			e[f].boost(1.5)
+
+
 func _exit() -> void:
 	if locked:
+		return
+	if phase == 2:
+		# ย้อนกลับไปให้ P1 เลือกใหม่
+		phase = 1
+		diamonds[1].tex = null
+		diamonds[1].queue_redraw()
+		diamonds[0].locked = false
+		cursor = maxi(0, ids.find(GameState.p1))
+		_sfx(SFX_BACK, -6.0, 1.2)
+		_show_character(false)
 		return
 	_sfx(SFX_BACK, -6.0, 1.2)
 	if menu_scene != "" and ResourceLoader.exists(menu_scene):
@@ -671,7 +705,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_move(cursor - 1)
 			KEY_RIGHT, KEY_D:
 				_move(cursor + 1)
-			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE:
+			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_J, KEY_KP_1:
 				_confirm()
 			KEY_ESCAPE:
 				_exit()

@@ -23,14 +23,14 @@ const ANIM_LEN := {"Punch1": 0.26, "Punch2": 0.26, "Punch3": 0.47, "JumpKick": 0
 
 ## เครดิต (แก้ได้ตามต้องการ)
 const CREDITS := [
-	["GAME DESIGN & DEVELOPMENT", ["Phurin Srithan"]],
+	["GAME DESIGN & DEVELOPMENT", ["Phurin Srithan", "นายสิทธิพงษ์ นครขวาง", "นายกิตตินันท์ ไขไพรวัน"]],
 	["ENGINE", ["Godot Engine 4.7  (MIT License)"]],
 	["3D CHARACTERS & ARENA", ["Emberclaw, Frostfang, Skyborne Ruins", "Generated with Meshy AI"]],
 	["PROGRAMMING ASSISTANCE", ["Claude by Anthropic"]],
 	["JAPANESE VOICE", ["VOICEVOX"]],
 	["MUSIC", ["\"s_b\" — provided by the developer"]],
 	["SOUND EFFECTS & VFX", ["Procedurally generated"]],
-	["FONTS", ["Barlow Condensed  (SIL Open Font License)", "M PLUS Rounded 1c  (SIL Open Font License)"]],
+	["FONTS", ["Barlow Condensed  (SIL Open Font License)", "M PLUS Rounded 1c  (SIL Open Font License)", "Loma  (TLWG, GPL with font exception)"]],
 ]
 
 const C_ORANGE := Color(1.0, 0.6, 0.12)

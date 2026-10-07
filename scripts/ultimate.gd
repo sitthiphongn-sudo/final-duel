@@ -64,7 +64,8 @@ func setup(p) -> void:
 
 func can_start() -> bool:
 	var e := _find_enemy()
-	return e != null and player.global_position.distance_to(e.global_position) <= max_range
+	return e != null and not e.in_ult and not (e.action in ["KnockDown", "GetUp"]) \
+		and player.global_position.distance_to(e.global_position) <= max_range
 
 
 # ======================================================================
@@ -283,13 +284,15 @@ func start() -> void:
 	track_target = null
 
 	# ---------- กลับเข้าเกม ----------
-	var back: Transform3D = player.camera.global_transform
-	_tw(cam, "global_transform", back, 0.6, Tween.EASE_IN_OUT)
-	_tw(cam, "fov", player.camera.fov, 0.6)
+	var gc: Camera3D = player.fight_cam
+	if gc:
+		_tw(cam, "global_transform", gc.global_transform, 0.6, Tween.EASE_IN_OUT)
+		_tw(cam, "fov", gc.fov, 0.6)
 	_tw(self, "letterbox", 0.0, 0.45)
 	_tw(self, "dim", 0.0, 0.35)
 	await _wait(0.6)
-	player.camera.current = true
+	if gc:
+		gc.current = true
 	player.in_ult = false
 	active = false
 
@@ -310,7 +313,7 @@ func _rush_hit(i: int, dir: Vector3, at: Vector3) -> void:
 	enemy.take_hit(dir, false, 16.0)                 # หมัดรัวในคัทซีน
 	var hud = get_tree().get_first_node_in_group("hud")
 	if hud:
-		hud.add_combo()
+		hud.add_combo(player.player_index)
 	enemy.velocity = Vector3.ZERO
 	enemy.knockback = Vector3.ZERO
 	cam_shake = maxf(cam_shake, 0.35)
@@ -443,7 +446,7 @@ func _bone_pos(ch, bone: String) -> Vector3:
 
 
 func _find_enemy() -> Node3D:
-	return get_tree().get_first_node_in_group("enemy") as Node3D
+	return player.opponent as Node3D
 
 
 func _update_frame() -> void:

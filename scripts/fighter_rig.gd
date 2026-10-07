@@ -26,7 +26,13 @@ func import_anim(path: String, new_name: String) -> String:
 	if not ResourceLoader.exists(path):
 		push_warning("ไม่พบไฟล์ " + path)
 		return ""
-	var inst := (load(path) as PackedScene).instantiate()
+	var res := load(path)
+	if res is Animation:          # ท่าที่แยกไว้เป็นไฟล์ .res แล้ว (เวอร์ชันเบา ไม่ต้องโหลดโมเดลทั้งตัว)
+		var an := (res as Animation).duplicate() as Animation
+		an.loop_mode = Animation.LOOP_LINEAR
+		_lib.add_animation(new_name, an)
+		return new_name
+	var inst := (res as PackedScene).instantiate()
 	var ap := inst.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	var result := ""
 	if ap:

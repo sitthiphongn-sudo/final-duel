@@ -1,10 +1,11 @@
 extends CharacterBody3D
-## ตัวละครผู้เล่น (Emberclaw)
-## WASD = เดิน | Shift = วิ่ง | Space = กระโดด | คลิกซ้าย/J = คอมโบ 5 จังหวะ (หมัด 1-2-อัปเปอร์คัต-กระโดดเตะ-เสยขึ้นฟ้า)
-## กลางอากาศหลังหมัด 5: คลิกซ้าย/J = ต่อยทีละหมัดเอง | K = ทุบลงพื้น | ไม่กดนาน = ร่วงลงเอง (ศัตรูไม่ล้ม)
-## ศัตรูกลางอากาศต่อยสวนได้ถ้าเว้นจังหวะนาน (มีง้างให้เห็นก่อน ต่อยแทรกทันจะขัดได้)
-## R = อัลติเมต (เมื่อเกจเต็ม) | คลิกขวา/L ค้าง = บล็อก | Q = Dash (กดทิศค้างเพื่อเลือกทาง, ทิศถอยหลัง = ถอยหลบ, กลางอากาศได้ 1 ครั้งต่อการกระโดด)
-## K = ลูกเตะกระโดด | เมาส์ = หมุนกล้อง | Esc = ปล่อยเมาส์
+## นักสู้ที่ผู้เล่นควบคุม — ใช้สคริปต์เดียวกันทั้ง P1 และ P2 (ตั้ง player_index ใน main.tscn)
+## ปุ่มของแต่ละคนดูที่ GameState.setup_inputs() (P1 = WASD + J/K/L, P2 = ลูกศร + Numpad)
+## ต่อย x5 = คอมโบ 5 จังหวะ (หมัด 1-2-อัปเปอร์คัต-กระโดดเตะ-เสยขึ้นฟ้า)
+## กลางอากาศหลังหมัด 5: ต่อย = ต่อยทีละหมัดเอง | เตะ = ทุบลงพื้น | ไม่กดนาน = ร่วงลงเอง (คู่ต่อสู้ไม่ล้ม)
+## ฝ่ายที่ถูกจับลอยกลางอากาศ: กดต่อยตอนอีกฝ่ายเว้นจังหวะ = ง้างสวน (อีกฝ่ายต่อยแทรกทันจะขัดได้) แล้วรัวหมัดกลับ
+## อัลติเมต (เกจเต็ม) | บล็อกค้าง | Dash (กดทิศค้างเพื่อเลือกทาง, ถอยหลัง = ถอยหลบ, กลางอากาศได้ 1 ครั้ง)
+## โจมตีจะหันหาคู่ต่อสู้อัตโนมัติเมื่ออยู่ใกล้ | ทิศเดินอิงกล้องรวม (fight_camera.gd)
 
 @export_group("Movement")
 @export var walk_speed := 2.2
@@ -68,6 +69,18 @@ extends CharacterBody3D
 @export var idle_crouch := 0.12        ## ย่อตัวลงกี่เมตร
 @export var idle_bounce := 0.03        ## เด้งขึ้นลงกี่เมตร
 
+@export_group("Player")
+@export_range(1, 2) var player_index := 1   ## 1 = ผู้เล่น 1 (ซ้าย), 2 = ผู้เล่น 2 (ขวา)
+@export var lock_on_range := 6.0       ## คู่ต่อสู้อยู่ใกล้กว่านี้ -> ออกท่าแล้วหันหาเอง
+
+@export_group("Air Counter")            ## ตอนถูกจับลอยกลางอากาศ: กดต่อยเพื่อสวน
+@export var air_stun := 0.35           ## โดนหมัดกลางอากาศแล้วมึนนานเท่านี้ก่อนสวนได้
+@export var air_counter_windup := 0.2  ## ง้างหมัดสวนนานเท่านี้ (อีกฝ่ายต่อยแทรกทันจะขัดได้)
+@export var air_flurry_hits := 6       ## สวนติดแล้วรัวหมัดกี่หมัด (หมัดสุดท้ายซัดร่วง)
+@export var air_flurry_interval := 0.12
+@export var air_flurry_damage := 12.0
+@export var knockdown_time := 1.6      ## นอนกับพื้นนานเท่านี้หลังโดนทุบ/K.O. แล้วค่อยลุก
+
 const GameState := preload("res://scripts/game_state.gd")
 var char_id := "emberclaw"
 var char_data := {}
@@ -77,7 +90,7 @@ const ACTION_LEN := {
 	"Punch1": 0.26, "Punch2": 0.26, "Punch3": 0.47,
 	"JumpKick": 0.45, "Land": 0.18, "Hit": 0.35, "HitHeavy": 0.6,
 	"JumpPrep": 0.08, "BlockHit": 0.25, "DashF": 0.3, "DashB": 0.28,
-	"WarpDive": 0.46,
+	"WarpDive": 0.46, "KnockDown": 1.6, "GetUp": 1.0,
 }
 ## จังหวะของหมัดที่ 5 (วาร์ปขึ้นฟ้าแล้วทิ่มหมัดลง 45°): หายตัว -> โผล่ลอยง้าง -> พุ่งลง -> ค้างนิดหน่อย
 const WD_APPEAR := 0.06       ## โผล่หน้าศัตรู
@@ -90,7 +103,7 @@ const CAM_PIVOT_OFS := Vector3(0, 1.5, 0)
 const WD_VANISH := 0.08
 const WD_DIVE := 0.22
 const WD_DIVE_LEN := 0.12
-const LOCK_MOVE := ["Punch1", "Punch2", "Punch3", "Hit", "HitHeavy", "BlockHit", "DashF", "DashB"]
+const LOCK_MOVE := ["Punch1", "Punch2", "Punch3", "Hit", "HitHeavy", "BlockHit", "DashF", "DashB", "KnockDown", "GetUp"]
 ## ความแรงพุ่งของแต่ละท่า (คูณกับ punch_lunge / kick_lunge)
 const LUNGE := {"Punch1": 0.8, "Punch2": 1.0, "Punch3": 1.3}
 ## จังหวะที่หมัด/เท้าถึงเป้า (สัดส่วนของความยาวท่า)
@@ -114,9 +127,25 @@ const STEPS := [
 ]
 
 @onready var model: Node3D = $Model
-@onready var cam_pivot: Node3D = $CameraPivot
-@onready var spring_arm: SpringArm3D = $CameraPivot/SpringArm3D
-@onready var camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
+const GroundImpact := preload("res://scripts/ground_impact.gd")
+const SLAM_SFX := preload("res://sounds/ground_slam.wav")
+
+var fight_cam = null                 ## กล้องรวม (fight_camera.gd)
+var opponent = null                  ## ผู้เล่นอีกคน
+var pfx := "p1_"                     ## คำนำหน้าชื่อปุ่ม
+var controls_locked := false         ## จบยก/พักเกม -> ไม่รับปุ่ม
+var frozen := false                  ## ถูกอีกฝ่ายจับลอยค้าง (ท่าหมัด 5 / อัลติเมต)
+var knockdown_pending := false       ## ตกถึงพื้นแล้วล้มหงาย
+var slam_pending := false            ## โดนทุบจากฟ้า -> ฝุ่น/หินกระจายแรง
+var block_time := 0.0                ## (ให้เข้ากับโค้ดของอีกฝ่ายที่ตั้งค่านี้)
+var cooldown := 0.0
+## กล้องสั่น: เก็บไว้ที่กล้องรวม (ทั้งสองคนแชร์)
+var shake: float:
+	get:
+		return fight_cam.shake if fight_cam else 0.0
+	set(v):
+		if fight_cam:
+			fight_cam.shake = v
 
 const FighterRig := preload("res://scripts/fighter_rig.gd")
 const HandFire := preload("res://scripts/hand_fire.gd")
@@ -136,7 +165,6 @@ var combo_queued := false
 var air_time := 0.0
 var action_elapsed := 0.0
 var hit_done := false
-var shake := 0.0
 var step_timer := 0.0
 var knockback := Vector3.ZERO
 var is_blocking := false
@@ -194,7 +222,8 @@ var fire_r: Node3D
 
 func _ready() -> void:
 	# ตัวละครที่เลือกจากหน้าเลือกตัวละคร: เปลี่ยนโมเดล + ค่าสถานะ + สีเอฟเฟกต์
-	char_id = GameState.p1
+	pfx = "p%d_" % player_index
+	char_id = GameState.p1 if player_index == 1 else GameState.p2
 	char_data = GameState.data(char_id)
 	model = GameState.swap_model(self, model, char_id)
 	hp_max = float(char_data["hp"])
@@ -202,12 +231,12 @@ func _ready() -> void:
 	damage_heavy = round(float(char_data["atk"]) * 1.7)
 	vfx_color = char_data["vfx_color"]
 	spawn_point = global_position
-	add_to_group("player")
+	add_to_group("fighters")
+	add_to_group("p%d" % player_index)
 	hp = hp_max
 	stamina = stamina_max
-	_setup_input()
-	spring_arm.add_excluded_object(get_rid())
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	GameState.setup_inputs()
+	_find_refs.call_deferred()
 
 	anim_player = model.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if anim_player == null:
@@ -229,13 +258,13 @@ func _ready() -> void:
 	if rig.setup(model, anim_player):
 		rig.build_all(ACTION_LEN)
 	run_anim = rig.import_anim(char_data["run_glb"], "Run")
-	base_fov = camera.fov
 	voice = Voice.new()
 	add_child(voice)
-	if GameState.game_live:
-		voice.say("start", 0.8)          # เสียงพูดตอนเริ่มเกม
-	elif get_parent() and get_parent().has_signal("started"):
-		get_parent().started.connect(func(): voice.say("start", 0.8), CONNECT_ONE_SHOT)          # เสียงพูดตอนเริ่มเกม
+	if player_index == 1:              # เสียงพูดตอนเริ่มเกม (คนเดียวพอ ไม่พูดซ้อนกัน)
+		if GameState.game_live:
+			voice.say("start", 0.8)
+		elif get_parent() and get_parent().has_signal("started"):
+			get_parent().started.connect(func(): voice.say("start", 0.8), CONNECT_ONE_SHOT)
 	ult = Ultimate.new()
 	add_child(ult)
 	ult.setup(self)
@@ -244,62 +273,68 @@ func _ready() -> void:
 	if hand_fire and rig._skel:
 		fire_l = _attach_fire(1)
 		fire_r = _attach_fire(-1)
-	print("animations: ", anim_player.get_animation_list())
 	_play("FightIdle", 0.0)
 
 
-func _setup_input() -> void:
-	var keys := {
-		"move_forward": [KEY_W, KEY_UP],
-		"move_back": [KEY_S, KEY_DOWN],
-		"move_left": [KEY_A, KEY_LEFT],
-		"move_right": [KEY_D, KEY_RIGHT],
-		"run": [KEY_SHIFT],
-		"jump": [KEY_SPACE],
-		"punch": [KEY_J],
-		"kick": [KEY_K],
-		"block": [KEY_L],
-		"dash": [KEY_Q],
-		"ultimate": [KEY_R],
-	}
-	for a in keys:
-		if InputMap.has_action(a):
-			continue
-		InputMap.add_action(a)
-		for k in keys[a]:
-			var ev := InputEventKey.new()
-			ev.physical_keycode = k
-			InputMap.action_add_event(a, ev)
-	var mb := InputEventMouseButton.new()
-	mb.button_index = MOUSE_BUTTON_LEFT
-	InputMap.action_add_event("punch", mb)
-	var mb2 := InputEventMouseButton.new()
-	mb2.button_index = MOUSE_BUTTON_RIGHT
-	InputMap.action_add_event("block", mb2)
+func _find_refs() -> void:
+	fight_cam = get_tree().get_first_node_in_group("fight_camera")
+	opponent = get_tree().get_first_node_in_group("p%d" % (3 - player_index))
+	# ยืนหันหน้าเข้าหากันตอนเริ่ม
+	if opponent:
+		var to: Vector3 = opponent.global_position - global_position
+		model.rotation.y = atan2(to.x, to.z)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		cam_pivot.rotate_y(-event.relative.x * mouse_sensitivity)
-		spring_arm.rotation.x = clamp(spring_arm.rotation.x - event.relative.y * mouse_sensitivity, -1.2, 0.3)
-	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-	elif event is InputEventMouseButton and event.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		get_viewport().set_input_as_handled()
+# ---------- ปุ่ม (แยกตามผู้เล่น) ----------
+
+func _pressed(a: String) -> bool:
+	return not controls_locked and Input.is_action_just_pressed(pfx + a)
+
+
+func _held(a: String) -> bool:
+	return not controls_locked and Input.is_action_pressed(pfx + a)
+
+
+func _move_input() -> Vector2:
+	if controls_locked:
+		return Vector2.ZERO
+	return Input.get_vector(pfx + "move_left", pfx + "move_right", pfx + "move_forward", pfx + "move_back")
+
+
+## ทิศเดินอิงกล้องรวม (หมุนรอบแกนตั้งอย่างเดียว)
+func _cam_basis() -> Basis:
+	if fight_cam:
+		return Basis(Vector3.UP, fight_cam.global_rotation.y)
+	return Basis()
+
+
+func _fov_kick() -> void:
+	if fight_cam:
+		fight_cam.fov_kick(dash_fov_kick * 0.6)
+
+
+## ทิศไปหาคู่ต่อสู้ (แนวนอน) + ระยะ
+func _to_opponent() -> Vector3:
+	if opponent == null or not is_instance_valid(opponent):
+		return Vector3.ZERO
+	var to: Vector3 = opponent.global_position - global_position
+	to.y = 0.0
+	return to
+
+
+## ถูกจับลอยกลางอากาศแล้วกดต่อยสวน (อีกฝ่ายเรียกเช็คทุกเฟรม)
+func air_counter_pressed() -> bool:
+	return _pressed("punch")
 
 
 func _physics_process(delta: float) -> void:
-	if in_ult:
-		return   # ระหว่างอัลติเมต คัทซีนควบคุมตัวละครเอง
+	if in_ult or frozen:
+		return   # ระหว่างอัลติเมต / ถูกจับลอยค้าง -> อีกฝ่ายควบคุมตำแหน่งเอง
 	if action == "WarpDive":
 		_warp_dive_tick(delta)
 		return
-	if wd_holding:              # โดนขัดจังหวะกลางท่า -> ปล่อยศัตรู คืนกล้อง
+	if wd_holding:              # โดนขัดจังหวะกลางท่า -> ปล่อยคู่ต่อสู้
 		_release_enemy()
-		_restore_camera()
-	if not cam_pivot.top_level:
-		cam_pivot.position = cam_pivot.position.lerp(CAM_PIVOT_OFS, clampf(8.0 * delta, 0.0, 1.0))
 	var on_floor := is_on_floor()
 	if on_floor:
 		air_time = 0.0
@@ -315,29 +350,29 @@ func _physics_process(delta: float) -> void:
 		stamina = minf(stamina_max, stamina + stamina_regen * delta)
 	var can_act: bool = action == "" or action == "Land" \
 		or (action.begins_with("Dash") and action_time < ACTION_LEN[action] * 0.35)
-	is_blocking = Input.is_action_pressed("block") and on_floor and (can_act or action == "BlockHit")
-	if Input.is_action_just_pressed("ultimate") and ult_gauge >= 100.0 and on_floor and can_act and ult.can_start():
+	is_blocking = _held("block") and on_floor and (can_act or action == "BlockHit")
+	if _pressed("ultimate") and ult_gauge >= 100.0 and on_floor and can_act and ult.can_start():
 		ult_gauge = 0.0
 		ult.start()
 		return
 	# Dash กลางอากาศได้ 1 ครั้งต่อการกระโดด (ระหว่างลอย หรือหลังเตะโดนแล้ว)
 	var air_dash_ok: bool = not on_floor and air_dash_ready \
 		and (action == "" or (action == "JumpKick" and hit_done))
-	if Input.is_action_just_pressed("dash") and ((on_floor and can_act) or air_dash_ok) and dash_cd <= 0.0 \
+	if _pressed("dash") and ((on_floor and can_act) or air_dash_ok) and dash_cd <= 0.0 \
 			and not action.begins_with("Dash") and stamina >= dash_cost:
 		if not on_floor:
 			air_dash_ready = false
 		stamina -= dash_cost
 		stamina_delay = 0.6
 		_start_dash()
-	if Input.is_action_just_pressed("jump") and on_floor and can_act and not is_blocking:
+	if _pressed("jump") and on_floor and can_act and not is_blocking:
 		_start_action("JumpPrep")
-	if Input.is_action_just_pressed("punch") and not action.begins_with("Hit") and not is_blocking:
+	if _pressed("punch") and not action.begins_with("Hit") and not is_blocking:
 		if can_act and on_floor:
 			_start_action("Punch1")
 		elif action in ["Punch1", "Punch2", "Punch3", "JumpKick"]:
 			combo_queued = true
-	if Input.is_action_just_pressed("kick") and can_act and not is_blocking:
+	if _pressed("kick") and can_act and not is_blocking:
 		if on_floor:
 			velocity.y = jump_velocity * kick_jump
 			air_time = 0.2
@@ -369,6 +404,8 @@ func _physics_process(delta: float) -> void:
 			# จังหวะที่ 5: วาร์ปขึ้นเหนือหัวศัตรูแล้วทิ่มหมัดลง
 			_start_warp_dive()
 			return
+		elif action_time <= 0.0 and action == "KnockDown":
+			_start_action("GetUp")
 		elif action_time <= 0.0:
 			if action.begins_with("Dash"):
 				dash_cd = dash_cooldown
@@ -382,11 +419,11 @@ func _physics_process(delta: float) -> void:
 			combo_queued = false
 
 	# ---- เคลื่อนที่ (อิงทิศกล้อง) ----
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var dir := cam_pivot.global_basis * Vector3(input.x, 0, input.y)
+	var input := _move_input()
+	var dir := _cam_basis() * Vector3(input.x, 0, input.y)
 	dir.y = 0
 	dir = dir.normalized()
-	var running := Input.is_action_pressed("run")
+	var running := _held("run")
 	var speed := run_speed if running else walk_speed
 	if action in LOCK_MOVE or is_blocking:
 		speed = 0.0
@@ -421,6 +458,11 @@ func _physics_process(delta: float) -> void:
 	elif on_floor:
 		velocity.x = move_toward(velocity.x, 0, 20.0 * delta)
 		velocity.z = move_toward(velocity.z, 0, 20.0 * delta)
+	# ยืนเฉยๆ / บล็อก -> หันหน้าหาคู่ต่อสู้เอง (ล็อกเป้าแบบเกมต่อสู้ 3D)
+	var to_opp := _to_opponent()
+	if (action == "" or action == "BlockHit") and (dir == Vector3.ZERO or is_blocking) and to_opp.length() > 0.2 \
+			and knockback.length() <= 0.05:
+		model.rotation.y = lerp_angle(model.rotation.y, atan2(to_opp.x, to_opp.z), turn_speed * 0.6 * delta)
 
 	# ระหว่าง Dash ตัวละครหายไป (เหมือนวาร์ป) แล้วโผล่พร้อมเอฟเฟกต์ที่ปลายทาง
 	if action.begins_with("Dash"):
@@ -443,8 +485,19 @@ func _physics_process(delta: float) -> void:
 	var was_air := air_time
 	move_and_slide()
 
+	# ตกถึงพื้นหลังโดนทุบ / K.O. -> ล้มหงาย + ฝุ่น/หินกระจาย
+	if knockdown_pending and is_on_floor() and was_air > 0.1:
+		knockdown_pending = false
+		_start_action("KnockDown")
+		action_time = knockdown_time
+		_sfx("land", 2.0, 0.8)
+		GroundImpact.spawn(self, global_position, 1.0 if slam_pending else 0.45)
+		if slam_pending:
+			_sfx_stream(SLAM_SFX, 4.0, randf_range(0.95, 1.05))
+		shake = maxf(shake, 1.1 if slam_pending else 0.5)
+		slam_pending = false
 	# ลงพื้นหลังลอยนาน -> ท่า Land
-	if is_on_floor() and was_air > 0.25 and (action == "" or action == "JumpKick"):
+	elif is_on_floor() and was_air > 0.25 and (action == "" or action == "JumpKick"):
 		_start_action("Land")
 		_sfx("land", -3.0)
 
@@ -490,11 +543,15 @@ func _lunge_speed() -> float:
 
 
 func _start_action(a: String) -> void:
-	# หันไปทางที่กดทิศค้างไว้ก่อนออกท่า
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	if input != Vector2.ZERO and a in HIT_FRAC:
-		var d := cam_pivot.global_basis * Vector3(input.x, 0, input.y)
-		model.rotation.y = atan2(d.x, d.z)
+	# ออกท่าโจมตี: คู่ต่อสู้อยู่ใกล้ -> หันหาเอง, ไม่งั้นหันตามทิศที่กดค้าง
+	if a in HIT_FRAC:
+		var to_opp := _to_opponent()
+		var input := _move_input()
+		if to_opp.length() > 0.1 and to_opp.length() <= lock_on_range:
+			model.rotation.y = atan2(to_opp.x, to_opp.z)
+		elif input != Vector2.ZERO:
+			var d := _cam_basis() * Vector3(input.x, 0, input.y)
+			model.rotation.y = atan2(d.x, d.z)
 	action = a
 	action_time = ACTION_LEN[a]
 	action_elapsed = 0.0
@@ -531,7 +588,7 @@ func _try_hit() -> void:
 	fwd = fwd.normalized()
 	var heavy := action in HEAVY
 	var reach := hit_range + (0.3 if action == "JumpKick" else 0.0)
-	for e in get_tree().get_nodes_in_group("enemy"):
+	for e in ([opponent] if opponent and is_instance_valid(opponent) else []):
 		var to: Vector3 = e.global_position - global_position
 		to.y = 0
 		if to.length() > reach or fwd.dot(to.normalized()) < 0.35:
@@ -540,7 +597,7 @@ func _try_hit() -> void:
 		var blocked: bool = e.take_hit(fwd, heavy, dmg)
 		var hud = get_tree().get_first_node_in_group("hud")
 		if hud and not blocked:
-			hud.add_combo()
+			hud.add_combo(player_index)
 		ult_gauge = minf(100.0, ult_gauge + (3.0 if blocked else (ult_gain_heavy if heavy else ult_gain_hit)))
 		if not blocked:
 			var hit_pos: Vector3 = e.global_position + Vector3.UP * 1.25 - fwd * 0.2
@@ -559,22 +616,6 @@ func _hitstop(duration: float) -> void:
 	Engine.time_scale = 0.05
 	await get_tree().create_timer(duration, true, false, true).timeout
 	Engine.time_scale = 1.0
-
-
-func _process(delta: float) -> void:
-	# กล้องสั่น (ใช้เวลาจริง ไม่ขึ้นกับ hitstop)
-	var real_delta := delta / maxf(Engine.time_scale, 0.001)
-	if shake > 0.0:
-		var s2 := shake * shake
-		camera.h_offset = randf_range(-1.0, 1.0) * 0.45 * s2
-		camera.v_offset = randf_range(-1.0, 1.0) * 0.45 * s2
-		camera.rotation.z = randf_range(-1.0, 1.0) * 0.06 * s2
-		shake = move_toward(shake, 0.0, real_delta * 2.2)
-	else:
-		camera.h_offset = 0.0
-		camera.v_offset = 0.0
-		camera.rotation.z = 0.0
-	camera.fov = lerpf(camera.fov, base_fov, clampf(real_delta * 6.0, 0.0, 1.0))
 
 
 func _sfx(sfx_name: String, volume_db := 0.0, pitch := 1.0) -> void:
@@ -597,6 +638,8 @@ func _sfx_stream(stream: AudioStream, volume_db := 0.0, pitch := 1.0) -> void:
 func take_hit(dir: Vector3, heavy: bool, damage := 0.0) -> bool:
 	if in_ult:
 		return true
+	if action == "KnockDown" or action == "GetUp":
+		return false   # ล้มอยู่ ตีไม่โดน
 	# บล็อกได้เฉพาะการโจมตีจากด้านหน้า
 	if is_blocking and model.global_basis.z.dot(-dir) > 0.3:
 		var sp: Vector3 = global_position + Vector3.UP * 1.15 - dir * 0.75
@@ -626,13 +669,17 @@ func take_hit(dir: Vector3, heavy: bool, damage := 0.0) -> bool:
 # ---------- Dash ----------
 
 func _start_dash() -> void:
-	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var input := _move_input()
 	var facing := model.global_basis.z
 	facing.y = 0
 	facing = facing.normalized()
+	var to_opp := _to_opponent()
+	if to_opp.length() > 0.2 and to_opp.length() < 12.0:
+		facing = to_opp.normalized()           # ไม่กดทิศ = Dash เข้าหาคู่ต่อสู้
+		model.rotation.y = atan2(facing.x, facing.z)
 	var d := facing
 	if input != Vector2.ZERO:
-		d = cam_pivot.global_basis * Vector3(input.x, 0, input.y)
+		d = _cam_basis() * Vector3(input.x, 0, input.y)
 		d.y = 0
 		d = d.normalized()
 	combo_queued = false
@@ -647,7 +694,7 @@ func _start_dash() -> void:
 		model.rotation.y = atan2(d.x, d.z)
 		_start_action("DashF")
 	_sfx("whoosh_light", -3.0, 0.7)
-	camera.fov = base_fov + dash_fov_kick
+	_fov_kick()
 	# วาร์ป: ระเบิดพลังที่จุดออกตัว + ลำแสงไปยังจุดปลายทาง
 	var dist: float = dash_distance if action == "DashF" else dash_back_distance
 	dash_end_pos = global_position + dash_dir * dist
@@ -668,14 +715,11 @@ func _start_warp_dive() -> void:
 	var fwd := model.global_basis.z
 	fwd.y = 0
 	fwd = fwd.normalized()
-	# หาศัตรูที่ใกล้ที่สุด (ไม่มี = ทิ่มลงข้างหน้าเฉยๆ)
+	# เป้าคือคู่ต่อสู้ถ้าอยู่ใกล้ (ไม่มี = ทิ่มลงข้างหน้าเฉยๆ)
 	wd_target = null
-	var best := 7.0
-	for e in get_tree().get_nodes_in_group("enemy"):
-		var dd: float = (e.global_position - global_position).length()
-		if dd < best:
-			best = dd
-			wd_target = e
+	if opponent and is_instance_valid(opponent) and (opponent.global_position - global_position).length() < 7.0 \
+			and not opponent.in_ult:
+		wd_target = opponent
 	var ep: Vector3 = global_position + fwd * 2.0
 	if wd_target:
 		ep = wd_target.global_position
@@ -710,8 +754,6 @@ func _start_warp_dive() -> void:
 		wd_target.is_blocking = false
 		wd_target.block_time = 0.0
 		wd_holding = true
-		# กล้องจับที่ศัตรูแทน (ผู้เล่นวาร์ปไปมาจะได้ไม่เวียนหัว)
-		cam_pivot.top_level = true
 	else:
 		wd_t_final = 0.0
 		_setup_final_dive(ep)
@@ -726,7 +768,7 @@ func _start_warp_dive() -> void:
 	Vfx.ring(self, c, wd_s, Color(vfx_color.r, vfx_color.g, vfx_color.b, 0.7), 0.25, 1.4, 0.3)
 	Vfx.sparks(self, c, vfx_color, 7, 4.0)
 	_sfx("whoosh_light", -3.0, 0.75)
-	camera.fov = base_fov + dash_fov_kick
+	_fov_kick()
 
 
 ## ตำแหน่งท่าทิ่มหมัดสุดท้าย: โผล่เหนือหัวด้านหลังศัตรู แล้วพุ่งลงเป็นแนว warp_dive_angle
@@ -770,12 +812,6 @@ func _warp_dive_tick(delta: float) -> void:
 	# ศัตรูลอยค้างจนกว่าจะโดนหมัดสุดท้าย
 	if e_ok and wd_holding and not wd_flurry:
 		e.global_position = _enemy_air_pos(t)
-	if e_ok and cam_pivot.top_level:
-		var mid: Vector3 = e.global_position
-		if model.visible and t > WD_RUSH_START:
-			mid = (e.global_position + global_position) * 0.5
-		var focus: Vector3 = mid + Vector3.UP * 1.1
-		cam_pivot.global_position = cam_pivot.global_position.lerp(focus, clampf(10.0 * delta, 0.0, 1.0))
 
 	if e_ok and t < wd_t_final:
 		if t < WD_APPEAR:
@@ -791,7 +827,7 @@ func _warp_dive_tick(delta: float) -> void:
 					wd_dash_started = true
 					_play("DashF", 0.02, 1.3, true)
 					_sfx("whoosh_light", -2.0, 0.65)
-					camera.fov = base_fov + dash_fov_kick
+					_fov_kick()
 					var c0 := front + Vector3.UP * 1.0
 					var c1 := air_front + Vector3.UP * 1.0
 					Vfx.ring(self, c0, Vector3.UP, Color(vfx_color.r, vfx_color.g, vfx_color.b, 0.7), 0.25, 1.4, 0.3)
@@ -843,9 +879,9 @@ func _warp_dive_tick(delta: float) -> void:
 			return
 		wd_idle += delta
 		wd_punch_t += delta
-		if Input.is_action_just_pressed("punch"):
+		if _pressed("punch"):
 			wd_buffer = true
-		if Input.is_action_just_pressed("kick"):
+		if _pressed("kick"):
 			wd_kick_buffer = true
 		if wd_buffer and wd_punch_t >= air_rush_interval:
 			wd_buffer = false
@@ -870,12 +906,8 @@ func _warp_dive_tick(delta: float) -> void:
 			if wd_counter_t >= _e_param(e, "air_counter_windup", 0.2):
 				_start_flurry(e)
 				return
-		elif wd_e_stun >= _e_param(e, "air_stun", 0.35):
-			wd_next_roll -= delta
-			if wd_next_roll <= 0.0:
-				wd_next_roll = 0.25
-				if randf() < _e_param(e, "air_counter_chance", 0.6):
-					_start_air_counter(e)
+		elif wd_e_stun >= _e_param(e, "air_stun", 0.35) and e.has_method("air_counter_pressed") and e.air_counter_pressed():
+			_start_air_counter(e)                   # อีกฝ่ายกดต่อยสวน (หลังหายมึน)
 		# ศัตรูลอยสูงขึ้นทีละนิดตามจำนวนหมัด
 		wd_drift = move_toward(wd_drift, 0.035 * (wd_rush_i + 1), delta * 0.6)
 		# ว่างอยู่ -> กลับท่าตั้งการ์ดลอยกลางอากาศ
@@ -988,7 +1020,7 @@ func _rush_hit(e, dir: Vector3, launch: bool) -> void:
 	e.knockback = Vector3.ZERO
 	var hud = get_tree().get_first_node_in_group("hud")
 	if hud:
-		hud.add_combo()
+		hud.add_combo(player_index)
 	ult_gauge = minf(100.0, ult_gauge + ult_gain_hit * 0.5)
 	var hit_pos: Vector3 = e.global_position + Vector3.UP * 1.3 - dir * 0.2
 	Vfx.ring(self, hit_pos, dir, vfx_color, 0.2, 1.3 if launch else 0.9, 0.22)
@@ -1014,7 +1046,7 @@ func _warp_dive_hit() -> void:
 	_release_enemy()
 	var hud = get_tree().get_first_node_in_group("hud")
 	if hud and not blocked:
-		hud.add_combo()
+		hud.add_combo(player_index)
 	ult_gauge = minf(100.0, ult_gauge + ult_gain_heavy)
 	if not blocked:
 		if "knockdown_pending" in e:
@@ -1131,6 +1163,9 @@ func _enemy_rush_hit(e) -> void:
 	dir.y = 0
 	dir = dir.normalized() if dir.length() > 0.05 else -wd_s
 	_damage(_e_param(e, "air_flurry_damage", 12.0))
+	var hud = get_tree().get_first_node_in_group("hud")
+	if hud and "player_index" in e:
+		hud.add_combo(e.player_index)
 	_play("Hit", 0.02, 1.5, true)
 	var col: Color = e.vfx_color if "vfx_color" in e else Color(0.4, 0.75, 1.0)
 	var hp_pos := global_position + Vector3.UP * 1.25 - dir * 0.2
@@ -1172,10 +1207,7 @@ func _release_enemy() -> void:
 
 
 func _restore_camera() -> void:
-	if cam_pivot.top_level:
-		var g := cam_pivot.global_transform
-		cam_pivot.top_level = false
-		cam_pivot.global_transform = g        # แล้วค่อยๆ เลื่อนกลับมาที่ตัวผู้เล่น (ดู _physics_process)
+	pass                                      # กล้องรวมตามทั้งสองคนเองอยู่แล้ว
 
 
 # ---------- ไฟที่มือ ----------
@@ -1216,15 +1248,40 @@ func _punch_vfx(a: String) -> void:
 	Vfx.ring(self, pos + fwd * 0.35, fwd, Color(wind_color.r, wind_color.g, wind_color.b, 0.35), 0.12, 0.65, 0.18)
 
 
-## เสียเลือด (0 = แพ้ยกนี้ แล้วฟื้นใหม่)
+## เสียเลือด (0 = แพ้ยกนี้ -> ฉากหลักประกาศผู้ชนะแล้วเริ่มยกใหม่)
 func _damage(amount: float) -> void:
-	if amount <= 0.0:
+	if amount <= 0.0 or hp <= 0.0:
 		return
 	hp = maxf(0.0, hp - amount)
 	if hp <= 0.0:
-		var hud = get_tree().get_first_node_in_group("hud")
-		if hud:
-			hud.show_ko("K.O.")
-		get_tree().create_timer(3.0, true, false, true).timeout.connect(func():
-			hp = hp_max
-			ult_gauge = 0.0)
+		knockdown_pending = true
+		velocity.y = maxf(velocity.y, 4.0)      # เด้งลอยนิดหนึ่งแล้วล้มลงพื้น
+		air_time = maxf(air_time, 0.15)
+		var main := get_tree().current_scene
+		if main and main.has_method("on_fighter_ko"):
+			main.on_fighter_ko(self)
+
+
+## เริ่มยกใหม่: เลือด/สตามินาเต็ม กลับจุดเกิด
+func reset_round() -> void:
+	_release_enemy()
+	hp = hp_max
+	stamina = stamina_max
+	action = ""
+	combo_queued = false
+	knockdown_pending = false
+	slam_pending = false
+	frozen = false
+	in_ult = false
+	is_blocking = false
+	knockback = Vector3.ZERO
+	velocity = Vector3.ZERO
+	global_position = spawn_point
+	model.visible = true
+	model.rotation = Vector3.ZERO
+	if opponent:
+		var to: Vector3 = opponent.spawn_point - spawn_point
+		model.rotation.y = atan2(to.x, to.z)
+	if anim_player:
+		anim_player.speed_scale = 1.0
+	_play("FightIdle", 0.1, 1.0, true)
