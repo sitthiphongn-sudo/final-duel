@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bwoftuvisfq0i"
-path="res://.godot/imported/ultimate_preview.png-c9e5e4a11fbc9483a14c6a2418064423.ctex"
+uid="uid://ca4f6lg3hk4ao"
+path="res://.godot/imported/air_punch_preview.png-eacef1718cd6f6f26c2fb017bf7b4121.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Claude outputs/ultimate_preview.png"
-dest_files=["res://.godot/imported/ultimate_preview.png-c9e5e4a11fbc9483a14c6a2418064423.ctex"]
+source_file="res://previews/air_punch_preview.png"
+dest_files=["res://.godot/imported/air_punch_preview.png-eacef1718cd6f6f26c2fb017bf7b4121.ctex"]
 
 [params]
 
