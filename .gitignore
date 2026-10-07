@@ -4,3 +4,8 @@
 
 # Raw Meshy source files already extracted into characters/ (kept locally, not versioned)
 .unused_raw_assets/
+
+# repo/โฟลเดอร์อื่นที่อยู่ในนี้ (ไม่ใช่ส่วนของเกม) — ห้าม commit ไม่งั้น GitHub Pages build พัง
+3D_project_final/
+final-duel/
+.kilo/
