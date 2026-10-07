@@ -193,6 +193,11 @@ const AUDIO_DEFAULTS := {"master": 0.8, "music": 0.75, "sfx": 0.9}
 static var audio := {"master": 0.8, "music": 0.75, "sfx": 0.9}
 static var _settings_ready := false
 
+## คุณภาพกราฟิก: 0 = LOW (ลื่นสุด, ค่าเริ่มต้นบนเว็บ), 1 = MEDIUM, 2 = HIGH (ค่าเริ่มต้นบนคอม)
+const GFX_NAMES := ["LOW", "MEDIUM", "HIGH"]
+static var gfx := 2
+static var show_fps := false
+
 
 ## เรียกตอนเริ่มฉากใดก็ได้ (ครั้งแรกจะโหลดค่าจากไฟล์ + สร้าง bus + ใช้ค่า)
 static func init_settings() -> void:
@@ -200,11 +205,15 @@ static func init_settings() -> void:
 	ensure_audio_buses()
 	if not _settings_ready:
 		_settings_ready = true
+		gfx = default_gfx()
 		var cfg := ConfigFile.new()
 		if cfg.load(SETTINGS_PATH) == OK:
 			for k in AUDIO_DEFAULTS:
 				audio[k] = clampf(float(cfg.get_value("audio", k, AUDIO_DEFAULTS[k])), 0.0, 1.0)
+		gfx = clampi(int(cfg.get_value("video", "quality", default_gfx())), 0, 2)
+		show_fps = bool(cfg.get_value("video", "show_fps", false))
 	apply_audio()
+	apply_graphics()
 
 
 ## ฟอนต์หลักไม่มีตัวอักษรไทย -> ใช้ Loma เป็นฟอนต์สำรอง (ชื่อผู้พัฒนาในเครดิต ฯลฯ)
@@ -249,4 +258,59 @@ static func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	for k in audio:
 		cfg.set_value("audio", k, audio[k])
+	cfg.set_value("video", "quality", gfx)
+	cfg.set_value("video", "show_fps", show_fps)
 	cfg.save(SETTINGS_PATH)
+
+
+# ================= กราฟิก =================
+
+static func default_gfx() -> int:
+	return 0 if OS.has_feature("web") else 2
+
+
+## ค่ารวมทั้งเกม (ใช้กับทุกฉาก): ความละเอียดภาพ 3D + คุณภาพเงา
+static func apply_graphics() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var vp := tree.root
+	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	vp.scaling_3d_scale = [0.7, 0.85, 1.0][gfx]          # เรนเดอร์ 3D เล็กลงแล้วขยาย (UI ยังคมเหมือนเดิม)
+	RenderingServer.directional_soft_shadow_filter_set_quality([0, 1, 2][gfx])
+	RenderingServer.directional_shadow_atlas_set_size([2048, 2048, 4096][gfx], true)
+
+
+static func set_gfx(level: int) -> void:
+	gfx = clampi(level, 0, 2)
+	apply_graphics()
+
+
+## ปรับฉากต่อสู้/ฉากโชว์ตามระดับกราฟิก (ท้องฟ้า, glow, เงา, แสง)
+static func apply_scene_graphics(scene: Node) -> void:
+	for we in scene.find_children("*", "WorldEnvironment", true, false):
+		var env: Environment = (we as WorldEnvironment).environment
+		if env == null:
+			continue
+		env = env.duplicate(true)          # อย่าแก้ resource ต้นฉบับที่แคชไว้ (เผื่อเปลี่ยนระดับกลางเกม)
+		(we as WorldEnvironment).environment = env
+		env.glow_enabled = env.glow_enabled and gfx >= 2
+		if env.sky:
+			env.sky.radiance_size = Sky.RADIANCE_SIZE_32 if gfx < 2 else Sky.RADIANCE_SIZE_64
+			var sm := env.sky.sky_material as ShaderMaterial
+			if sm:
+				sm.set_shader_parameter("octaves", [3, 4, 6][gfx])
+				sm.set_shader_parameter("cheap", gfx < 2)
+	for l in scene.find_children("*", "DirectionalLight3D", true, false):
+		var sun := l as DirectionalLight3D
+		if gfx == 0:
+			sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+			sun.directional_shadow_max_distance = minf(sun.directional_shadow_max_distance, 24.0)
+		elif gfx == 1:
+			sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+			sun.directional_shadow_max_distance = minf(sun.directional_shadow_max_distance, 30.0)
+
+
+## ตัวคูณจำนวนอนุภาค/เศษหิน
+static func fx_scale() -> float:
+	return [0.5, 0.75, 1.0][gfx]

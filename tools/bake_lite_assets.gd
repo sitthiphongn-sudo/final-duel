@@ -10,14 +10,14 @@ const MAP_SCALE := 30.0          ## ต้องตรงกับ transform ข
 const MAP_OFFSET_Y := -3.95
 const MAP_CUT_Y := -2.5          ## (พิกัดโลก) ลบสามเหลี่ยมที่ต่ำกว่าพื้นลานเกิน 2.5 เมตรทั้งอัน
 const MAP_DOWN_CUT_Y := -0.6      ## ลบหน้าที่หันลงข้างล่างที่อยู่ต่ำกว่าพื้น (ใต้แผ่นหิน มองไม่เห็นอยู่แล้ว)
-const MAP_TARGET_TRIS := 220000
-const MAP_COLLISION_TRIS := 30000
+const MAP_TARGET_TRIS := 120000
+const MAP_COLLISION_TRIS := 20000
 const MAP_ALBEDO_SIZE := 2048
 const MAP_NORMAL_SIZE := 1024
 
 const CHAR_TARGET_TRIS := 26000
 const CHAR_ALBEDO_SIZE := 2048
-const CHAR_OTHER_SIZE := 1024
+const CHAR_OTHER_SIZE := 512
 
 const CHARS := {
 	"emberclaw": {

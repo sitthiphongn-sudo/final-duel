@@ -6,6 +6,7 @@ extends Node3D
 @export_range(0.0, 1.0) var music_volume := 0.75            ## ความดังเพลง (0.75 = 75%)
 @export_file("*.tscn") var menu_scene := "res://scenes/menu.tscn"
 @export var round_restart_delay := 4.5   ## วินาทีหลัง K.O. ก่อนเริ่มยกใหม่
+@export var arena_floor_y := -0.04       ## ความสูงพื้นลานเรียบที่ตัวละครยืน (พื้นแมพจริงขรุขระ ±5 ซม.)
 
 const Hud := preload("res://scripts/hud.gd")
 const GameState := preload("res://scripts/game_state.gd")
@@ -58,8 +59,28 @@ func _ready() -> void:
 				dark.roughness = 1.0
 				dark.normal_scale = 0.6         # ลดความขรุขระของพื้น
 				m.set_surface_override_material(i, dark)
-	print("เตรียมแมพเสร็จใน %d ms" % (Time.get_ticks_msec() - t))
+		if GameState.gfx == 0:
+			m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF   # แมพไม่ต้องวาดลงเงาซ้ำ (เงาตัวละครยังอยู่)
+	_build_arena_floor()
+	GameState.apply_scene_graphics(self)
+	print("เตรียมแมพเสร็จใน %d ms (กราฟิก %s)" % [Time.get_ticks_msec() - t, GameState.GFX_NAMES[GameState.gfx]])
 	_build_pause()
+	_build_fps()
+
+
+## พื้นเรียบล่องหน (เลเยอร์ 3) ให้ตัวละครเดิน: collision แมพที่ลดรายละเอียดมีรอยต่อ/หลุมเล็กๆ ทำให้เดินสะดุด
+func _build_arena_floor() -> void:
+	var body := StaticBody3D.new()
+	body.name = "ArenaFloor"
+	body.collision_layer = 4
+	body.collision_mask = 0
+	var cs := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(80, 1, 80)
+	cs.shape = box
+	body.add_child(cs)
+	body.position = Vector3(0, arena_floor_y - 0.5, 0)
+	add_child(body)
 
 
 func _fighter(i: int) -> Node:
@@ -148,6 +169,39 @@ func to_menu() -> void:
 	get_tree().change_scene_to_file(menu_scene)
 
 
+# ================= ตัวนับ FPS (กด F3) =================
+
+var fps_label: Label
+
+func _build_fps() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 21
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	fps_label = Label.new()
+	fps_label.position = Vector2(12, 8)
+	fps_label.add_theme_font_size_override("font_size", 16)
+	fps_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	fps_label.add_theme_constant_override("outline_size", 5)
+	fps_label.visible = GameState.show_fps
+	layer.add_child(fps_label)
+	var tm := Timer.new()
+	tm.wait_time = 0.5
+	tm.autostart = true
+	tm.ignore_time_scale = true
+	tm.timeout.connect(func():
+		if fps_label.visible:
+			fps_label.text = "%d FPS  ·  %s" % [Engine.get_frames_per_second(), GameState.GFX_NAMES[GameState.gfx]])
+	layer.add_child(tm)
+
+
+func toggle_fps() -> void:
+	GameState.show_fps = not GameState.show_fps
+	fps_label.visible = GameState.show_fps
+	fps_label.text = "-- FPS"
+	GameState.save_settings()
+
+
 ## รับปุ่มตอนเกมหยุด (ต้องทำงานตลอดแม้ตอน pause)
 class PauseInput extends Node:
 	var main
@@ -156,5 +210,7 @@ class PauseInput extends Node:
 			return
 		if event.keycode == KEY_ESCAPE:
 			main.toggle_pause()
+		elif event.keycode == KEY_F3:
+			main.toggle_fps()
 		elif event.keycode == KEY_M and main.get_tree().paused:
 			main.to_menu()

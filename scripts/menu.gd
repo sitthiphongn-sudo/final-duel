@@ -23,7 +23,7 @@ const ANIM_LEN := {"Punch1": 0.26, "Punch2": 0.26, "Punch3": 0.47, "JumpKick": 0
 
 ## เครดิต (แก้ได้ตามต้องการ)
 const CREDITS := [
-	["GAME DESIGN & DEVELOPMENT", ["Phurin Srithan", "นายสิทธิพงษ์ นครขวาง", "นายกิตตินันท์ ไขไพรวัน"]],
+	["GAME DESIGN & DEVELOPMENT", ["Phurin Srithan", "Sitthiphong Nakhonkhwang", "Kittinan Khaiphraiwan"]],
 	["ENGINE", ["Godot Engine 4.7  (MIT License)"]],
 	["3D CHARACTERS & ARENA", ["Emberclaw, Frostfang, Skyborne Ruins", "Generated with Meshy AI"]],
 	["PROGRAMMING ASSISTANCE", ["Claude by Anthropic"]],
@@ -702,6 +702,9 @@ func _panel_settings() -> void:
 	vol_labels.clear()
 	for row in [["master", "MASTER VOLUME"], ["music", "MUSIC VOLUME"], ["sfx", "EFFECTS VOLUME"]]:
 		v.add_child(_volume_row(row[0], row[1]))
+	v.add_child(_spacer(6))
+	v.add_child(_lbl("GRAPHICS", f_upright, 18, C_ORANGE))
+	v.add_child(_graphics_row())
 	v.add_child(_spacer(10))
 	var reset := Button.new()
 	reset.text = "RESET TO DEFAULT"
@@ -716,6 +719,8 @@ func _panel_settings() -> void:
 	reset.pressed.connect(func():
 		for k in GameState.AUDIO_DEFAULTS:
 			GameState.set_volume(k, GameState.AUDIO_DEFAULTS[k])
+		GameState.set_gfx(GameState.default_gfx())
+		GameState.show_fps = false
 		GameState.save_settings()
 		mute_btn.off = false
 		mute_btn.queue_redraw()
@@ -723,6 +728,54 @@ func _panel_settings() -> void:
 	v.add_child(reset)
 	var note := _lbl("Settings are saved automatically.", FONT_BODY, 12, C_DIM)
 	v.add_child(note)
+
+
+## ระดับกราฟิก LOW / MEDIUM / HIGH + เปิด/ปิดตัวนับ FPS (กด F3 ระหว่างเล่นได้ด้วย)
+func _graphics_row() -> Control:
+	var r := HBoxContainer.new()
+	r.add_theme_constant_override("separation", 10)
+	var n := _lbl("QUALITY", f_title, 24, C_TEXT)
+	n.custom_minimum_size = Vector2(190, 0)
+	r.add_child(n)
+	for i in 3:
+		r.add_child(_choice_btn(GameState.GFX_NAMES[i], GameState.gfx == i, func():
+			GameState.set_gfx(i)
+			GameState.save_settings()
+			_sfx(SFX_CLICK, -2.0, 1.0)
+			_open_panel("settings")))
+	r.add_child(_spacer_h(14))
+	r.add_child(_choice_btn("FPS: " + ("ON" if GameState.show_fps else "OFF"), GameState.show_fps, func():
+		GameState.show_fps = not GameState.show_fps
+		GameState.save_settings()
+		_sfx(SFX_CLICK, -2.0, 1.0)
+		_open_panel("settings")))
+	return r
+
+
+func _spacer_h(w: float) -> Control:
+	var c := Control.new()
+	c.custom_minimum_size = Vector2(w, 0)
+	return c
+
+
+func _choice_btn(text: String, on: bool, cb: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_NONE
+	b.custom_minimum_size = Vector2(96, 34)
+	b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	b.add_theme_font_override("font", f_upright)
+	b.add_theme_font_size_override("font_size", 15)
+	if on:
+		b.add_theme_stylebox_override("normal", _style(C_ORANGE, C_ORANGE, 1, 2))
+		b.add_theme_color_override("font_color", Color(0.08, 0.06, 0.05))
+		b.add_theme_color_override("font_hover_color", Color(0.08, 0.06, 0.05))
+	else:
+		b.add_theme_stylebox_override("normal", _style(Color(1, 1, 1, 0.08), Color(1, 1, 1, 0.25), 1, 2))
+	b.add_theme_stylebox_override("hover", _style(C_ORANGE.darkened(0.15), C_ORANGE, 1, 2))
+	b.add_theme_stylebox_override("pressed", _style(C_ORANGE.darkened(0.3), C_ORANGE, 1, 2))
+	b.pressed.connect(cb)
+	return b
 
 
 func _volume_row(key: String, title: String) -> Control:

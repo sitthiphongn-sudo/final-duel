@@ -8,6 +8,7 @@ extends Node
 ## เรียก: GroundImpact.spawn(self, ตำแหน่งเท้า, กำลัง 0-1)
 
 const Vfx := preload("res://scripts/vfx.gd")
+const GameState := preload("res://scripts/game_state.gd")
 
 const DUST := Color(0.86, 0.8, 0.7)      ## สีฝุ่นหินทรายโทนเดียวกับแมพ
 const ROCK_COLORS := [Color(0.42, 0.39, 0.35), Color(0.52, 0.48, 0.42), Color(0.35, 0.33, 0.31), Color(0.58, 0.53, 0.45)]
@@ -207,7 +208,7 @@ static func _emitter(root: Node, pos: Vector3, basis: Basis, life: float) -> CPU
 static func _dust_ring(tree: SceneTree, root: Node, pos: Vector3, basis: Basis, power: float) -> void:
 	var life := 2.6
 	var p := _emitter(root, pos + basis.y * 0.15, basis, life)
-	p.amount = int(52 * power) + 8
+	p.amount = int((52 * power + 8) * GameState.fx_scale())
 	p.explosiveness = 0.95
 	p.randomness = 0.4
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -246,7 +247,7 @@ static func _dust_ring(tree: SceneTree, root: Node, pos: Vector3, basis: Basis, 
 static func _dust_plume(tree: SceneTree, root: Node, pos: Vector3, basis: Basis, power: float) -> void:
 	var life := 2.0
 	var p := _emitter(root, pos + basis.y * 0.3, basis, life)
-	p.amount = int(14 * power) + 4
+	p.amount = int((14 * power + 4) * GameState.fx_scale())
 	p.explosiveness = 0.85
 	p.randomness = 0.5
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -282,7 +283,7 @@ static func _dust_plume(tree: SceneTree, root: Node, pos: Vector3, basis: Basis,
 static func _grit(tree: SceneTree, root: Node, pos: Vector3, basis: Basis, power: float) -> void:
 	var life := 0.9
 	var p := _emitter(root, pos + basis.y * 0.12, basis, life)
-	p.amount = int(40 * power) + 8
+	p.amount = int((40 * power + 8) * GameState.fx_scale())
 	p.explosiveness = 1.0
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = 0.25
@@ -308,7 +309,7 @@ static func _grit(tree: SceneTree, root: Node, pos: Vector3, basis: Basis, power
 ## ก้อนหินจริง: ฟิสิกส์ตกกระดอนบนพื้น แล้วหดหายหลังจากนิ่ง
 static func _rocks(tree: SceneTree, root: Node, pos: Vector3, normal: Vector3, power: float) -> void:
 	var meshes := rock_meshes()
-	var count := int(12 * power) + 3
+	var count := int((12 * power + 3) * GameState.fx_scale())
 	var pm := PhysicsMaterial.new()
 	pm.bounce = 0.25
 	pm.friction = 0.9

@@ -12,6 +12,9 @@ extends Node3D
 @export var color_tail := Color(0.85, 0.2, 0.03)      ## ปลายเปลวก่อนมอด
 @export var color_ember := Color(1.0, 0.8, 0.4)       ## ประกายไฟ
 @export var color_light := Color(1.0, 0.52, 0.18)     ## สีแสงที่ส่องออกมา
+@export var with_light := true                        ## มีแสงส่องรอบมือไหม (ปิดเพื่อให้ลื่นขึ้น)
+
+const GameState := preload("res://scripts/game_state.gd")
 
 var flames: CPUParticles3D
 var tongues: CPUParticles3D
@@ -89,12 +92,13 @@ func _ready() -> void:
 	embers.color_ramp = _gradient([[0.0, _c(color_ember, 1.0)], [0.7, _c(color_mid, 0.8)], [1.0, _c(color_tail, 0.0)]])
 	add_child(embers)
 
-	light = OmniLight3D.new()
-	light.light_color = color_light
-	light.light_energy = light_energy
-	light.omni_range = 1.8
-	light.shadow_enabled = false
-	add_child(light)
+	if with_light:
+		light = OmniLight3D.new()
+		light.light_color = color_light
+		light.light_energy = light_energy
+		light.omni_range = 1.8
+		light.shadow_enabled = false
+		add_child(light)
 
 
 func boost(amount := 1.0) -> void:
@@ -113,6 +117,8 @@ func _process(delta: float) -> void:
 		tongues.scale_amount_min = 0.7 * (1.0 + 0.8 * _boost)
 		tongues.scale_amount_max = 1.0 * (1.0 + 0.8 * _boost)
 	# แสงกะพริบแบบสุ่มนุ่มๆ เหมือนเปลวไฟจริง
+	if light == null:
+		return
 	_flicker = lerpf(_flicker, randf_range(-1.0, 1.0), clampf(real_delta * 18.0 * fire_speed, 0.0, 1.0))
 	light.light_energy = light_energy * (1.0 + 0.25 * _flicker) * (1.0 + 1.5 * _boost)
 	light.omni_range = 1.8 + 1.2 * _boost
@@ -120,7 +126,7 @@ func _process(delta: float) -> void:
 
 func _particles(amount: int, lifetime: float, quad: float, tex: Texture2D) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
-	p.amount = amount
+	p.amount = maxi(3, int(round(amount * GameState.fx_scale())))
 	p.lifetime = lifetime
 	p.lifetime_randomness = 0.35
 	p.local_coords = false

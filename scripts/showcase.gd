@@ -309,7 +309,7 @@ func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	help = Label.new()
-	help.text = "1 Emberclaw   2 Frostfang   3 แมพ   ·   B พื้นหลัง   C ตัวละครในแมพ   N ชื่อ   ·   Space หยุด   R เริ่มใหม่   ซ้าย/ขวา ความเร็ว   ·   H ซ่อนข้อความนี้"
+	help.text = "1 Emberclaw   2 Frostfang   3 Map   ·   B Background   C Fighter on map   N Name   ·   Space Pause   R Restart   Left/Right Speed   ·   H Hide this"
 	help.add_theme_font_override("font", FONT_BODY)
 	help.add_theme_font_size_override("font_size", 16)
 	help.add_theme_color_override("font_color", Color(1, 1, 1, 0.85))

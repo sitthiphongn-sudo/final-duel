@@ -26,6 +26,10 @@ uniform float sea_coverage : hint_range(0.0, 1.0) = 0.55;
 uniform float sea_scale = 0.6;
 uniform vec3 sea_depth_color : source_color = vec3(0.26, 0.32, 0.46);
 
+group_uniforms Performance;
+uniform int octaves : hint_range(2, 6) = 6;     // ชั้นรายละเอียดของ noise (น้อย = เร็วขึ้น)
+uniform bool cheap = false;                     // ข้ามการคำนวณเงาเมฆ (เร็วขึ้นราว 2 เท่า)
+
 float hash(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
 	p += dot(p, p + 45.32);
@@ -45,11 +49,13 @@ float fbm(vec2 p) {
 	float a = 0.5;
 	mat2 rot = mat2(vec2(0.8, 0.6), vec2(-0.6, 0.8));
 	for (int i = 0; i < 6; i++) {
+		if (i >= octaves) break;
 		v += a * noise(p);
 		p = rot * p * 2.03 + vec2(1.7, 9.2);
 		a *= 0.5;
 	}
-	return v;
+	// ชดเชยให้ความหนาแน่นเฉลี่ยเท่าเดิมเมื่อใช้ชั้นน้อยลง
+	return v * (0.984375 / (1.0 - 2.0 * a));   // ผลรวมแอมพลิจูด = 1 - 2a
 }
 
 // ความหนาแน่นเมฆ 0..1 ที่ตำแหน่ง uv
@@ -83,7 +89,7 @@ void sky() {
 		float d = cloud_density(uv, cloud_coverage, t);
 		// แสงผ่านเมฆ: ตัวอย่างความหนาแน่นเลื่อนไปทางดวงอาทิตย์ เมฆหนา = มืดกว่า
 		vec2 to_sun = normalize(sun_dir.xz + 1e-4) * 0.08;
-		float d_sun = cloud_density(uv + to_sun, cloud_coverage, t);
+		float d_sun = cheap ? d * 0.8 : cloud_density(uv + to_sun, cloud_coverage, t);
 		float light = clamp(1.0 - d_sun * 0.75, 0.0, 1.0);
 		vec3 ccol = mix(cloud_shadow_color, cloud_color * sun_col, light);
 		// ขอบเมฆสว่างเมื่ออยู่ใกล้ดวงอาทิตย์ (silver lining)
@@ -103,7 +109,7 @@ void sky() {
 		float d = cloud_density(uv + vec2(31.0, 17.0), sea_coverage, t);
 		float top = clamp(smoothstep(0.35, 0.75, big) * 0.6 + d * 0.55, 0.0, 1.0);
 		// ด้านที่หันหาดวงอาทิตย์สว่างกว่า (เงาในร่องเมฆ)
-		float d_sun = cloud_density(uv + vec2(31.0, 17.0) + normalize(sun_dir.xz + 1e-4) * 0.06, sea_coverage, t);
+		float d_sun = cheap ? d * 0.85 : cloud_density(uv + vec2(31.0, 17.0) + normalize(sun_dir.xz + 1e-4) * 0.06, sea_coverage, t);
 		float shade = clamp(0.55 + (d - d_sun) * 1.5 + top * 0.4, 0.0, 1.0);
 		vec3 sea = mix(sea_depth_color, cloud_color * sun_col, shade * top + (1.0 - top) * 0.15);
 		sea += sun_glow_color * pow(sun_dot, 6.0) * 0.35 * top;

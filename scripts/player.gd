@@ -36,13 +36,14 @@ extends CharacterBody3D
 @export var damage_heavy := 38.0
 
 @export_group("Ultimate")
-@export var ult_start_full := true      ## เริ่มเกมมาเกจเต็มเลย (ไว้ลองท่า) ปิดเพื่อเล่นจริง
+@export var ult_start_full := false     ## เริ่มเกมมาเกจเต็มเลย (ไว้ลองท่า) ปิด = ต้องตีก่อนเกจถึงจะขึ้น
 @export var ult_gain_hit := 9.0         ## เกจที่ได้เมื่อต่อยโดน
 @export var ult_gain_heavy := 14.0      ## เกจที่ได้เมื่อหมัด 3 / เตะโดน
 @export var ult_gain_hurt := 6.0        ## เกจที่ได้เมื่อโดนต่อย
 
 @export_group("Hand Fire")
 @export var hand_fire := true
+@export var arena_radius := 7.2          ## เดินได้แค่ในวงกลมกลางลาน (เมตร จากจุดกึ่งกลางแมพ)
 @export var fire_size := 1.4
 
 @export_group("VFX")
@@ -231,6 +232,9 @@ func _ready() -> void:
 	damage_heavy = round(float(char_data["atk"]) * 1.7)
 	vfx_color = char_data["vfx_color"]
 	spawn_point = global_position
+	# เลเยอร์ 2 = ตัวละคร (ชนกันเอง), เลเยอร์ 3 = พื้นลานเรียบ (ไม่ชนพื้นแมพที่ขรุขระ -> เดินไม่ติด)
+	collision_layer = 2
+	collision_mask = 2 | 4
 	add_to_group("fighters")
 	add_to_group("p%d" % player_index)
 	hp = hp_max
@@ -484,6 +488,7 @@ func _physics_process(delta: float) -> void:
 
 	var was_air := air_time
 	move_and_slide()
+	_confine_to_arena(delta)
 
 	# ตกถึงพื้นหลังโดนทุบ / K.O. -> ล้มหงาย + ฝุ่น/หินกระจาย
 	if knockdown_pending and is_on_floor() and was_air > 0.1:
@@ -528,6 +533,30 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < respawn_height:
 		global_position = spawn_point
 		velocity = Vector3.ZERO
+
+
+## กันไม่ให้ออกนอกวงกลมกลางลาน (ถ้าถูกท่าอัลติเมตพาออกไป จะค่อยๆ เลื่อนกลับเข้ามา)
+func _confine_to_arena(delta: float) -> void:
+	var h := Vector2(global_position.x, global_position.z)
+	var d := h.length()
+	if d <= arena_radius or d < 0.001:
+		return
+	var n := h / d
+	var edge := n * arena_radius
+	if d > arena_radius + 0.6:
+		h = h.move_toward(edge, 10.0 * delta)
+	else:
+		h = edge
+	global_position.x = h.x
+	global_position.z = h.y
+	var outv := velocity.x * n.x + velocity.z * n.y
+	if outv > 0.0:
+		velocity.x -= outv * n.x
+		velocity.z -= outv * n.y
+	var outk := knockback.x * n.x + knockback.z * n.y
+	if outk > 0.0:
+		knockback.x -= outk * n.x
+		knockback.z -= outk * n.y
 
 
 ## ความเร็วพุ่งไปข้างหน้าของท่าที่กำลังเล่น: พุ่งแรงช่วงต้นท่าแล้วค่อยๆ หยุด
@@ -786,6 +815,7 @@ func _setup_final_dive(ep: Vector3) -> void:
 
 func _ground_below(p: Vector3) -> float:
 	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.5, p + Vector3.DOWN * 30.0)
+	q.collision_mask = 4                     # พื้นลานเรียบ (ที่ตัวละครยืนอยู่จริง)
 	var ex: Array[RID] = [get_rid()]
 	if wd_target:
 		ex.append(wd_target.get_rid())
@@ -1226,6 +1256,10 @@ func _attach_fire(side: int) -> Node3D:
 	fx.color_tail = fc[2]
 	fx.color_ember = fc[3]
 	fx.color_light = fc[4]
+	# แสงรอบมือกินเครื่องมาก (ต้องคำนวณแสงทั่วแมพ): HIGH = 2 มือ, MEDIUM = มือขวามือเดียว, LOW = ไม่มี
+	fx.with_light = GameState.gfx == 2 or (GameState.gfx == 1 and side == -1)
+	if GameState.gfx == 1:
+		fx.light_energy *= 1.5
 	fx.position = Vector3(0, 0.12, 0.0)   # จากข้อมือไปกลางกำปั้น
 	att.add_child(fx)
 	return fx
@@ -1276,6 +1310,7 @@ func reset_round() -> void:
 	is_blocking = false
 	knockback = Vector3.ZERO
 	velocity = Vector3.ZERO
+	ult_gauge = 100.0 if ult_start_full else 0.0   # เริ่มยกใหม่ต้องสะสมเกจใหม่
 	global_position = spawn_point
 	model.visible = true
 	model.rotation = Vector3.ZERO

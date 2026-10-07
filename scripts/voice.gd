@@ -7,19 +7,19 @@ const LINES := {
 		"stream": preload("res://voice/voice_start.mp3"),
 		"jp": "いくぞ！",
 		"romaji": "Ikuzo!",
-		"th": "ไปกันเลย!",
+		"en": "Let's go!",
 	},
 	"walk": {
 		"stream": preload("res://voice/voice_walk.mp3"),
 		"jp": "燃え尽きろ！",
 		"romaji": "Moetsukiro!",
-		"th": "ไหม้เป็นเถ้าไปซะ!",
+		"en": "Burn to ashes!",
 	},
 	"ult": {
 		"stream": preload("res://voice/voice_ult.mp3"),
 		"jp": "これで終わりだ！",
 		"romaji": "Kore de owari da!",
-		"th": "จบแค่นี้แหละ!",
+		"en": "This ends now!",
 	},
 }
 
@@ -28,7 +28,7 @@ const JP_FONTS := ["C:/Windows/Fonts/YuGothM.ttc", "C:/Windows/Fonts/meiryo.ttc"
 const TH_FONTS := ["C:/Windows/Fonts/leelawui.ttf", "C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/upcjl.ttf"]
 
 @export var volume_db := 2.0
-@export var show_thai := true
+@export var show_translation := true   ## แสดงคำแปลภาษาอังกฤษต่อท้ายคำอ่าน
 
 var ui: CanvasLayer
 var box: VBoxContainer
@@ -61,8 +61,8 @@ func say(key: String, delay := 0.0) -> void:
 func _show(line: Dictionary, dur: float) -> void:
 	label_jp.text = line.jp
 	var sub: String = line.romaji
-	if show_thai:
-		sub += "   ·   " + line.th
+	if show_translation:
+		sub += "   ·   " + line.en
 	label_sub.text = sub
 	_hide_at = Time.get_ticks_msec() / 1000.0 + dur
 	box.modulate.a = 0.0
