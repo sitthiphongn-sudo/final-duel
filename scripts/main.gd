@@ -18,6 +18,7 @@ var hud
 var round_over := false
 var wins := {1: 0, 2: 0}
 var pause_layer: CanvasLayer
+var pause_btn_layer: CanvasLayer
 
 
 ## หน้า VS เรียกเมื่อพร้อมเปิดฉากเกม
@@ -142,24 +143,66 @@ func _build_pause() -> void:
 	dim.color = Color(0, 0, 0, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	pause_layer.add_child(dim)
-	var l := Label.new()
-	l.text = "PAUSED\n\nEsc  —  Resume\nM  —  Main Menu"
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.set_anchors_preset(Control.PRESET_FULL_RECT)
-	l.add_theme_font_size_override("font_size", 34)
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	l.add_theme_constant_override("outline_size", 8)
-	pause_layer.add_child(l)
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.add_theme_constant_override("separation", 12)
+	pause_layer.add_child(box)
+	var title := Label.new()
+	title.text = "PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 54)
+	title.add_theme_color_override("font_outline_color", Color.BLACK)
+	title.add_theme_constant_override("outline_size", 10)
+	box.add_child(title)
+	for item in [["Resume   (Esc / P)", "resume"], ["Restart Match", "restart"], ["Main Menu   (M)", "menu"]]:
+		var b := Button.new()
+		b.text = item[0]
+		b.custom_minimum_size = Vector2(300, 48)
+		b.add_theme_font_size_override("font_size", 22)
+		b.process_mode = Node.PROCESS_MODE_ALWAYS
+		b.pressed.connect(_pause_action.bind(item[1]))
+		box.add_child(b)
+	# ปุ่ม II มุมขวาบน ไว้กดด้วยเมาส์ (เผื่อเว็บที่ Esc ถูกเบราว์เซอร์ใช้)
+	var pb := Button.new()
+	pb.text = "II"
+	pb.tooltip_text = "Pause (Esc / P)"
+	pb.focus_mode = Control.FOCUS_NONE
+	pb.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	pb.position = Vector2(-22, 8)
+	pb.custom_minimum_size = Vector2(44, 36)
+	pb.pressed.connect(toggle_pause)
+	pb.process_mode = Node.PROCESS_MODE_ALWAYS
+	var pl := CanvasLayer.new()
+	pl.layer = 19
+	pl.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(pl)
+	pl.add_child(pb)
+	pause_btn_layer = pl
 	var handler := PauseInput.new()
 	handler.main = self
 	pause_layer.add_child(handler)
+
+
+func _pause_action(what: String) -> void:
+	match what:
+		"resume":
+			toggle_pause()
+		"restart":
+			get_tree().paused = false
+			Engine.time_scale = 1.0
+			get_tree().reload_current_scene()
+		"menu":
+			to_menu()
 
 
 func toggle_pause() -> void:
 	var p := not get_tree().paused
 	get_tree().paused = p
 	pause_layer.visible = p
+	if pause_btn_layer:
+		pause_btn_layer.visible = not p
 	Engine.time_scale = 1.0
 
 
@@ -208,7 +251,7 @@ class PauseInput extends Node:
 	func _unhandled_input(event: InputEvent) -> void:
 		if not (event is InputEventKey and event.pressed and not event.echo):
 			return
-		if event.keycode == KEY_ESCAPE:
+		if event.keycode == KEY_ESCAPE or event.keycode == KEY_P:
 			main.toggle_pause()
 		elif event.keycode == KEY_F3:
 			main.toggle_fps()

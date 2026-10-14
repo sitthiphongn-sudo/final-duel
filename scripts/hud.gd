@@ -20,6 +20,8 @@ const HOLE_R := {"hp": [62.0, 52.0, 853.0, 58.0], "st": [48.0, 28.0, 566.0, 37.0
 const OFF_X := {"hp": 0.0, "st": 129.0, "ex": 200.0}
 const OFF_Y := {"hp": 0.0, "st": 140.0, "ex": 232.0}
 
+const EX_SHOW_TIME := 2.0                 ## เกจอัลติโชว์ค้างกี่วินาทีหลังตีโดน
+const EX_KEEP_WHEN_FULL := true            ## เกจเต็ม = โชว์ค้าง (ตั้ง false ถ้าอยากซ่อนตลอด)
 const UI_SCALE := 0.40                    ## ย่อกรอบลงมาให้พอดีจอ
 const POR := 84.0                         ## ขนาดรูปตัวละคร
 const GROUP_X := 92.0                    ## กรอบหลอดเริ่มถัดจากรูป
@@ -42,6 +44,10 @@ var hp_text := {}
 var st_fill := {}
 var ex_fill := {}
 var ex_label := {}
+var ex_parts := {}          ## กรอบ/พื้น/หลอด/ชื่อของเกจอัลติ ไว้ซ่อน-โชว์
+var ex_vis := {"p": 0.0, "e": 0.0}
+var ex_prev := {"p": 0.0, "e": 0.0}
+var ex_hold := {"p": 0.0, "e": 0.0}
 var name_label := {}
 var portrait_node := {}
 var side_panel := {}
@@ -55,7 +61,7 @@ var combo := 0
 var combo_timer := 0.0
 var combo_owner := 0
 var banner: Label
-var hint_box: VBoxContainer
+var hint_box: Control
 
 var _ftex: GradientTexture2D = null
 var _panel_w := 0.0
@@ -104,20 +110,71 @@ func _build() -> void:
 	banner.visible = false
 	root.add_child(banner)
 
-	# ปุ่มของทั้งสองคน โชว์ช่วงแรกของเกมแล้วค่อยๆ จางหาย
-	hint_box = VBoxContainer.new()
-	hint_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	hint_box.position = Vector2(-560, -56)
-	hint_box.size = Vector2(1120, 60)
+	_build_legend()
+
+
+## แผงปุ่มแบบปุ่มคีย์ที่มุมล่าง: P1 ซ้าย / P2 ขวา (จางลงหลังผ่านไปสักพัก)
+func _build_legend() -> void:
+	hint_box = Control.new()
+	hint_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	hint_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(hint_box)
 	for i in [1, 2]:
-		var h := _label(GameState.CONTROLS_TEXT[i], 15, Color(1, 1, 1, 0.9), 5)
-		h.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hint_box.add_child(h)
+		var panel := PanelContainer.new()
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.05, 0.05, 0.08, 0.62)
+		sb.set_corner_radius_all(10)
+		sb.set_content_margin_all(8)
+		panel.add_theme_stylebox_override("panel", sb)
+		var grid := GridContainer.new()
+		grid.columns = 3
+		grid.add_theme_constant_override("h_separation", 18)
+		grid.add_theme_constant_override("v_separation", 5)
+		grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(grid)
+		for row in GameState.CONTROLS_KEYS[i]:
+			var cell := HBoxContainer.new()
+			cell.add_theme_constant_override("separation", 3)
+			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			for k in row[0]:
+				cell.add_child(_keycap(k))
+			var d := _label(" " + row[1], 13, Color(1, 1, 1, 0.92), 4)
+			cell.add_child(d)
+			grid.add_child(cell)
+		hint_box.add_child(panel)
+		panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT if i == 1 else Control.PRESET_BOTTOM_RIGHT)
+		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		panel.grow_horizontal = Control.GROW_DIRECTION_END if i == 1 else Control.GROW_DIRECTION_BEGIN
+		panel.offset_left = 12.0 if i == 1 else -12.0
+		panel.offset_right = panel.offset_left
+		panel.offset_top = -10.0
+		panel.offset_bottom = -10.0
 	var ht := create_tween()
-	ht.tween_interval(9.0)
-	ht.tween_property(hint_box, "modulate:a", 0.0, 1.5)
+	ht.tween_interval(10.0)
+	ht.tween_property(hint_box, "modulate:a", 0.4, 1.5)
+
+
+func _keycap(txt: String) -> PanelContainer:
+	var pc := PanelContainer.new()
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.93, 0.93, 0.96)
+	sb.border_color = Color(0.55, 0.57, 0.65)
+	sb.border_width_bottom = 3
+	sb.set_corner_radius_all(5)
+	sb.content_margin_left = 6
+	sb.content_margin_right = 6
+	sb.content_margin_top = 1
+	sb.content_margin_bottom = 1
+	pc.add_theme_stylebox_override("panel", sb)
+	var l := Label.new()
+	l.text = txt
+	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_color_override("font_color", Color(0.12, 0.12, 0.18))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.add_child(l)
+	return pc
 
 
 func _label(txt: String, size: int, col: Color, outline := 8) -> Label:
@@ -207,7 +264,7 @@ func _frame_bar(panel: Control, key: String, left: bool, color: Color, ghost: bo
 
 	var fr := _tex_rect(panel, tex, pos, Vector2(fw, fh))
 	fr.flip_h = flip
-	return [f, g, hpos, hsize]
+	return [f, g, hpos, hsize, back, fr]
 
 
 func _build_side(side: String, left: bool, disp_name: String, portrait: Texture2D,
@@ -269,6 +326,7 @@ func _build_side(side: String, left: bool, disp_name: String, portrait: Texture2
 	exl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if left else HORIZONTAL_ALIGNMENT_RIGHT
 	panel.add_child(exl)
 	ex_label[side] = exl
+	ex_parts[side] = [ex[4], ex[5], exl]
 
 
 func _build_combo() -> void:
@@ -325,13 +383,22 @@ func _update_side(side: String, ch) -> void:
 		g.scale.x = maxf(hp_ratio, lerpf(g.scale.x, hp_ratio, 0.06))
 	st_fill[side].scale.x = clampf(ch.stamina / ch.stamina_max, 0.0, 1.0)
 	ex_fill[side].scale.x = clampf(ch.ult_gauge / 100.0, 0.0, 1.0)
+	# เกจอัลติโผล่เฉพาะฝั่งที่กำลังตี (เกจเพิ่ม) แล้วจางหาย / ถ้าเต็มจะค้างไว้ให้รู้ว่ากดอัลติได้
+	var dt := get_process_delta_time()
+	if ch.ult_gauge > ex_prev[side] + 0.01:
+		ex_hold[side] = EX_SHOW_TIME
+	ex_prev[side] = ch.ult_gauge
+	ex_hold[side] = maxf(0.0, ex_hold[side] - dt)
+	var want := 1.0 if (ex_hold[side] > 0.0 or ch.in_ult or (EX_KEEP_WHEN_FULL and ch.ult_gauge >= 100.0)) else 0.0
+	ex_vis[side] = move_toward(ex_vis[side], want, dt * 4.0)
+	var pulse := 1.0
 	if ch.ult_gauge >= 100.0:
-		var pulse := 0.55 + 0.45 * sin(Time.get_ticks_msec() / 110.0)
-		ex_fill[side].modulate.a = pulse
-		ex_label[side].modulate.a = pulse
-	else:
-		ex_fill[side].modulate.a = 1.0
-		ex_label[side].modulate.a = 1.0
+		pulse = 0.55 + 0.45 * sin(Time.get_ticks_msec() / 110.0)
+	ex_fill[side].modulate.a = pulse * ex_vis[side]
+	ex_label[side].modulate.a = pulse * ex_vis[side]
+	for n in ex_parts[side]:
+		if n != ex_label[side]:
+			n.modulate.a = ex_vis[side]
 
 
 # ---------- เรียกจากเกม ----------

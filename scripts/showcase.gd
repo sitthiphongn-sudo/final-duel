@@ -231,10 +231,10 @@ func _make_fighter(id: String, parent: Node3D) -> Node3D:
 	var m := (load(d["walk_glb"]) as PackedScene).instantiate() as Node3D
 	parent.add_child(m)
 	var ap := m.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	var rig = FighterRig.new()
+	var rig = GameState.make_rig(d)
 	if ap and rig.setup(m, ap):
 		rig.build_all(ANIM_LEN)
-		ap.play("FightIdle")
+		ap.play("MenuIdle" if ap.has_animation("MenuIdle") else "FightIdle")
 		if rig._skel:
 			for side in [1, -1]:
 				_attach_fire(rig, side, d)
@@ -242,6 +242,9 @@ func _make_fighter(id: String, parent: Node3D) -> Node3D:
 
 
 func _attach_fire(rig, side: int, d: Dictionary) -> void:
+	if d.get("wings", false):
+		GameState.attach_wings(rig, side)
+		return
 	var skel: Skeleton3D = rig._skel
 	var att := BoneAttachment3D.new()
 	att.bone_name = skel.get_bone_name(rig._b(side, "Hand"))

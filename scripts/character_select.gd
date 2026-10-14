@@ -188,11 +188,11 @@ func _build_model(id: String) -> void:
 	stage.add_child(m)
 	m.visible = false
 	var ap := m.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	var rig = FighterRig.new()
+	var rig = GameState.make_rig(d)
 	var entry := {"node": m, "anim": ap, "rig": rig, "fire_l": null, "fire_r": null}
 	if ap and rig.setup(m, ap):
 		rig.build_all(ANIM_LEN)
-		ap.play("FightIdle")
+		ap.play("MenuIdle" if ap.has_animation("MenuIdle") else "FightIdle")
 		if rig._skel:
 			entry["fire_l"] = _attach_fire(rig, 1, d)
 			entry["fire_r"] = _attach_fire(rig, -1, d)
@@ -200,6 +200,8 @@ func _build_model(id: String) -> void:
 
 
 func _attach_fire(rig, side: int, d: Dictionary) -> Node3D:
+	if d.get("wings", false):
+		return GameState.attach_wings(rig, side)
 	var skel: Skeleton3D = rig._skel
 	var att := BoneAttachment3D.new()
 	att.bone_name = skel.get_bone_name(rig._b(side, "Hand"))
@@ -648,7 +650,7 @@ func _pose(id: String) -> void:
 	var e: Dictionary = models[id]
 	if e["anim"] and e["anim"].has_animation("Punch3"):
 		e["anim"].play("Punch3", 0.05)
-		e["anim"].queue("FightIdle")
+		e["anim"].queue("MenuIdle" if e["anim"].has_animation("MenuIdle") else "FightIdle")
 	for f in ["fire_l", "fire_r"]:
 		if e[f]:
 			e[f].boost(1.5)

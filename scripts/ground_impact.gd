@@ -369,3 +369,44 @@ static func _crack(tree: SceneTree, root: Node, pos: Vector3, basis: Basis, powe
 	tw.tween_interval(4.5)
 	tw.tween_property(mat, "albedo_color:a", 0.0, 1.5)
 	tw.tween_callback(mi.queue_free)
+
+
+## ร่องรอยตอนถูกซัดไถลไปตามพื้น: ฝุ่นลากยาว + หินเล็กๆ ไถลตามไปข้างหน้า
+static func skid(tree: SceneTree, root: Node, pos: Vector3, dir: Vector3, power := 1.0) -> void:
+	var up := Basis.IDENTITY
+	_dust_plume(tree, root, pos, up, 0.3 * power)
+	_grit(tree, root, pos, up, 0.22 * power)
+	var meshes := rock_meshes()
+	var pm := PhysicsMaterial.new()
+	pm.bounce = 0.1
+	pm.friction = 0.35
+	for i in 3:
+		var rb := RigidBody3D.new()
+		rb.collision_layer = 0
+		rb.collision_mask = 1
+		rb.physics_material_override = pm
+		var sz := randf_range(0.07, 0.2)
+		rb.mass = sz * 8.0
+		var mi := MeshInstance3D.new()
+		mi.mesh = meshes[randi() % meshes.size()]
+		mi.scale = Vector3.ONE * sz
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = ROCK_COLORS[randi() % ROCK_COLORS.size()]
+		mat.roughness = 1.0
+		mi.material_override = mat
+		rb.add_child(mi)
+		var cs := CollisionShape3D.new()
+		var sh := SphereShape3D.new()
+		sh.radius = sz * 0.8
+		cs.shape = sh
+		rb.add_child(cs)
+		root.add_child(rb)
+		var side := dir.cross(Vector3.UP) * randf_range(-1.2, 1.2)
+		rb.global_position = pos + Vector3(0, 0.12 + sz, 0) + side * 0.2
+		rb.rotation = Vector3(randf() * TAU, randf() * TAU, randf() * TAU)
+		rb.linear_velocity = dir * randf_range(5.0, 11.0) + side + Vector3(0, randf_range(0.6, 2.4), 0)
+		rb.angular_velocity = Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 10.0
+		var tw := rb.create_tween()
+		tw.tween_interval(randf_range(1.8, 3.0))
+		tw.tween_property(mi, "scale", Vector3.ONE * 0.001, 0.5).set_ease(Tween.EASE_IN)
+		tw.tween_callback(rb.queue_free)

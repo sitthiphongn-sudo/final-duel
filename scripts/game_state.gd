@@ -7,7 +7,7 @@ static var p1 := "emberclaw"          ## ตัวที่ผู้เล่น
 static var p2 := "frostfang"          ## คู่ต่อสู้ (บอท)
 static var game_live := true         ## false = ฉากเกมกำลังถูกเตรียมอยู่ใต้หน้า VS (ยังไม่เปิดเสียง/เสียงพูด)
 
-const ORDER := ["emberclaw", "frostfang"]
+const ORDER := ["emberclaw", "frostfang", "king_duck"]
 
 ## ฉากต่อสู้ + ชื่อแมพ (แสดงในหน้า VS ตอนโหลด)
 const BATTLE_SCENE := "res://scenes/main.tscn"
@@ -83,6 +83,41 @@ const CHARACTERS := {
 		"physical": [100, 95, 95],
 		"elemental": [120, 50, 105, 100, 100, 90],
 	},
+	"king_duck": {
+		"name": "KING DUCK",
+		"title": "The Fluffy Monarch",
+		"desc": "A tiny royal chick with a very big crown. King Duck has no arms, so he fights with feet, belly and pure attitude - and when he strikes, wings of golden light burst out of nowhere to smack his foes.",
+		"style": "Trickster · Mid range",
+		"element": "wind",
+		"wings": true, "ult_script": "res://scripts/ultimate_duck.gd",
+		"model_scale": 0.75,
+		# คอมโบเป็ด: จิกรัว (2 ที) -> เกลียวเสยลอยตัว -> ราชันทุบ (ตีลังกาทุบ ศัตรูกระเด็นชนขอบลาน หินแตก)
+		"action_len": {"Punch1": 0.42, "Punch2": 0.46, "Punch3": 0.80, "JumpKick": 0.5},
+		"lunge": {"Punch1": 0.4, "Punch2": 0.8, "Punch3": 1.5},
+		"hit_frac": {"Punch1": 0.30, "Punch2": 0.45, "Punch3": 0.60, "JumpKick": 0.42},
+		"extra_hits": {"Punch1": 0.62},
+		"pop": {"Punch2": 6.5},
+		"walk_glb": "res://lite/characters/king_duck.tscn",
+		"run_glb": "",
+		"portrait": "res://ui/portrait_king.png",
+		"card": "res://ui/card_king_duck.png",
+		"vs_l": "res://ui/vs/king_duck_l.png", "vs_r": "res://ui/vs/king_duck_r.png",
+		"hp": 2100, "atk": 22,
+		"color": Color(1.0, 0.85, 0.35),
+		"vfx_color": Color(1.0, 0.9, 0.5),
+		"hp_color": Color(0.85, 0.65, 0.10),
+		"ex_name": "ROYAL", "ex_color": Color(1.0, 0.85, 0.3),
+		"flipbook": "res://vfx/fire_flipbook_8x8.png",
+		"fire": [Color(1.0, 1.0, 0.9), Color(1.0, 0.88, 0.4), Color(0.9, 0.65, 0.15), Color(1.0, 0.95, 0.7), Color(1.0, 0.9, 0.5)],
+		"abilities": [
+			["J", "×5", "Peck · Rising Spiral · Royal Smash"],
+			["K", "", "Dive Bomb"],
+			["Q", "", "Fluff Dash"],
+			["R", "", "Golden Decree"],
+		],
+		"physical": [95, 95, 100],
+		"elemental": [50, 50, 80, 125, 100, 90],
+	},
 }
 
 ## ชื่อไอคอนในแผงสถานะ (ui/icons/<name>.png)
@@ -94,6 +129,27 @@ const CONTROLS_TEXT := {
 	1: "P1   WASD move · Space jump · J punch · K kick · L block · Q dash · R ultimate · Shift run",
 	2: "P2   Arrows move · Num0 jump · Num1 punch · Num2 kick · Num3 block · Num4 dash · Num5 ultimate · NumEnter run",
 }
+
+
+## แผงปุ่มแบบปุ่มคีย์ (ซ้าย = P1, ขวา = P2): [[ปุ่ม...], คำอธิบาย]
+const CONTROLS_KEYS := {
+	1: [[["W", "A", "S", "D"], "Move"], [["Space"], "Jump"], [["J", "K"], "Punch / Kick"],
+		[["L"], "(Hold) Block"], [["Q", "Shift"], "Dash / Run"], [["R"], "Ultimate"]],
+	2: [[["←", "↑", "↓", "→"], "Move"], [["Num0"], "Jump"], [["Num1", "Num2"], "Punch / Kick"],
+		[["Num3"], "(Hold) Block"], [["Num4", "NumEnter"], "Dash / Run"], [["Num5"], "Ultimate"]],
+}
+
+
+## สร้าง rig ให้ตัวละคร: ตัวที่มี "wings" (เป็ดราชา ไม่มีแขน) ใช้ DuckRig, ที่เหลือใช้ FighterRig
+static func make_rig(d: Dictionary):
+	if d.get("wings", false):
+		return (load("res://scripts/duck_rig.gd") as GDScript).new()
+	return (load("res://scripts/fighter_rig.gd") as GDScript).new()
+
+
+## เอฟเฟกต์ที่ "มือ" ของตัวละครที่ใช้ปีกใส (แทนไฟที่มือ) side: 1 = ซ้าย, -1 = ขวา
+static func attach_wings(rig, side: int) -> Node3D:
+	return (load("res://scripts/duck_wings.gd") as GDScript).attach(rig._skel, "Body", side, Vector3(0.12, 0.22, 0.0))
 
 
 static func data(id: String) -> Dictionary:

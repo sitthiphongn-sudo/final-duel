@@ -112,6 +112,18 @@ const HIT_FRAC := {"Punch1": 0.3, "Punch2": 0.3, "Punch3": 0.44, "JumpKick": 0.4
 ## กดต่อยซ้ำได้ก่อนท่าจบ (ตัดช่วงดึงหมัดกลับ) ให้คอมโบไหลเร็ว
 const COMBO_CANCEL := 0.35
 const HEAVY := ["Punch3", "JumpKick"]
+## ค่าต่อตัวละคร (ตัวละครบางตัวเขียนทับใน GameState: action_len / lunge / hit_frac / extra_hits)
+var alen: Dictionary = ACTION_LEN
+var lunge_t: Dictionary = LUNGE
+var hitf: Dictionary = HIT_FRAC
+var extra_hits := {}          ## ท่า -> จังหวะโดนครั้งที่ 2 (ครั้งท้ายเป็นครั้งแรง) เช่น พายุหมุนของเป็ด
+var hit2_done := false
+var launch_t := {}         ## ท่า -> ความเร็วซัดศัตรูกระเด็นไปชนขอบลาน (เป็ดราชา Punch3)
+var pop_t := {}            ## ท่า -> ความเร็วเด้งศัตรูขึ้นฟ้า (เป็ดราชา Punch2)
+var skid_t := 0.0
+var slide_decay := 7.0
+var slide_end := false   ## ถูกทุบจบคอมโบกลางอากาศ -> ไถลไปตามพื้นพร้อมหิน
+var wall_launched := false ## ถูกซัดจนกระเด็น -> ถ้าชนขอบลานจะเกิด "ชนผนัง หินแตก"
 
 const SFX := {
 	"whoosh_light": preload("res://sounds/whoosh_light.wav"),
@@ -201,6 +213,9 @@ var wd_punch_t := 0.0
 var wd_buffer := false
 var wd_kick_buffer := false
 var wd_drift := 0.0
+var wd_e_off := Vector3.ZERO      ## เป็ดราชา: ศัตรูถูกซัดกระเด็นออกไปจากจุดลอยกลางอากาศเท่านี้ (ดราก้อนบอล)
+var wd_off_tw: Tween
+var wd_detached := false         ## เป็ดวาปหายตัวระหว่างศัตรูกำลังกระเด็น (ไม่ตามศัตรู)
 var wd_e_stun := 0.0          # เวลาตั้งแต่ศัตรูโดนหมัดล่าสุด (มึนอยู่ = สวนไม่ได้)
 var wd_counter_t := -1.0      # >= 0 = ศัตรูกำลังง้างหมัดสวน
 var wd_next_roll := 0.0
@@ -222,11 +237,22 @@ var fire_r: Node3D
 
 
 func _ready() -> void:
+	print("[build] player.gd v-chain3")
 	# ตัวละครที่เลือกจากหน้าเลือกตัวละคร: เปลี่ยนโมเดล + ค่าสถานะ + สีเอฟเฟกต์
 	pfx = "p%d_" % player_index
 	char_id = GameState.p1 if player_index == 1 else GameState.p2
 	char_data = GameState.data(char_id)
+	alen = ACTION_LEN.duplicate()
+	alen.merge(char_data.get("action_len", {}), true)
+	lunge_t = LUNGE.duplicate()
+	lunge_t.merge(char_data.get("lunge", {}), true)
+	hitf = HIT_FRAC.duplicate()
+	hitf.merge(char_data.get("hit_frac", {}), true)
+	extra_hits = char_data.get("extra_hits", {})
+	launch_t = char_data.get("launch", {})
+	pop_t = char_data.get("pop", {})
 	model = GameState.swap_model(self, model, char_id)
+	model.scale = Vector3.ONE * float(char_data.get("model_scale", 1.0))
 	hp_max = float(char_data["hp"])
 	damage_light = float(char_data["atk"])
 	damage_heavy = round(float(char_data["atk"]) * 1.7)
@@ -251,16 +277,18 @@ func _ready() -> void:
 			walk_anim = n
 	if walk_anim != "":
 		anim_player.get_animation(walk_anim).loop_mode = Animation.LOOP_LINEAR
-	rig = FighterRig.new()
+	rig = GameState.make_rig(char_data)
 	rig.idle_period = idle_period
 	rig.idle_crouch = idle_crouch
 	rig.idle_bounce = idle_bounce
-	for a in LUNGE:   # ระยะพุ่งรวม = ความเร็วสูงสุด * เวลาช่วงพุ่ง * 2/PI
-		rig.step_dist[a] = punch_lunge * LUNGE[a] * FighterRig.LUNGE_LEN * ACTION_LEN[a] * 2.0 / PI
+	for a in lunge_t:   # ระยะพุ่งรวม = ความเร็วสูงสุด * เวลาช่วงพุ่ง * 2/PI
+		rig.step_dist[a] = punch_lunge * lunge_t[a] * FighterRig.LUNGE_LEN * alen[a] * 2.0 / PI
 	rig.step_dist["DashF"] = dash_distance
 	rig.step_dist["DashB"] = dash_back_distance
 	if rig.setup(model, anim_player):
-		rig.build_all(ACTION_LEN)
+		rig.build_all(alen)
+	if walk_anim == "" and anim_player.has_animation("Walking"):
+		walk_anim = "Walking"
 	run_anim = rig.import_anim(char_data["run_glb"], "Run")
 	voice = Voice.new()
 	add_child(voice)
@@ -269,7 +297,8 @@ func _ready() -> void:
 			voice.say("start", 0.8)
 		elif get_parent() and get_parent().has_signal("started"):
 			get_parent().started.connect(func(): voice.say("start", 0.8), CONNECT_ONE_SHOT)
-	ult = Ultimate.new()
+	var ult_path: String = char_data.get("ult_script", "")
+	ult = (load(ult_path) as GDScript).new() if ult_path != "" else Ultimate.new()
 	add_child(ult)
 	ult.setup(self)
 	if ult_start_full:
@@ -353,7 +382,7 @@ func _physics_process(delta: float) -> void:
 	if stamina_delay <= 0.0:
 		stamina = minf(stamina_max, stamina + stamina_regen * delta)
 	var can_act: bool = action == "" or action == "Land" \
-		or (action.begins_with("Dash") and action_time < ACTION_LEN[action] * 0.35)
+		or (action.begins_with("Dash") and action_time < alen[action] * 0.35)
 	is_blocking = _held("block") and on_floor and (can_act or action == "BlockHit")
 	if _pressed("ultimate") and ult_gauge >= 100.0 and on_floor and can_act and ult.can_start():
 		ult_gauge = 0.0
@@ -385,11 +414,14 @@ func _physics_process(delta: float) -> void:
 
 	if action != "":
 		action_elapsed += delta
-		if not hit_done and action in HIT_FRAC and action_elapsed >= HIT_FRAC[action] * ACTION_LEN[action]:
+		if not hit_done and action in hitf and action_elapsed >= hitf[action] * alen[action]:
 			hit_done = true
 			_try_hit()
+		if hit_done and not hit2_done and extra_hits.has(action) and action_elapsed >= float(extra_hits[action]) * alen[action]:
+			hit2_done = true
+			_try_hit(true)
 		action_time -= delta
-		var cancel_ok: bool = hit_done and action_time <= ACTION_LEN[action] * COMBO_CANCEL
+		var cancel_ok: bool = hit_done and action_time <= alen[action] * COMBO_CANCEL
 		if combo_queued and cancel_ok and action == "Punch1":
 			combo_queued = false
 			_start_action("Punch2")
@@ -404,7 +436,7 @@ func _physics_process(delta: float) -> void:
 			_sfx("jump", -6.0)
 			_start_action("JumpKick")
 		elif combo_queued and action == "JumpKick" and hit_done \
-				and action_elapsed >= HIT_FRAC["JumpKick"] * ACTION_LEN["JumpKick"] + 0.05:
+				and action_elapsed >= hitf["JumpKick"] * alen["JumpKick"] + 0.05:
 			# จังหวะที่ 5: วาร์ปขึ้นเหนือหัวศัตรูแล้วทิ่มหมัดลง
 			_start_warp_dive()
 			return
@@ -434,16 +466,26 @@ func _physics_process(delta: float) -> void:
 	elif action == "Land" or action == "JumpPrep":
 		speed *= 0.4
 
+	if wall_launched and knockback.length() < 3.0:
+		wall_launched = false
+		slide_end = false
 	var lunge := _lunge_speed()
 	if knockback.length() > 0.05:
 		velocity.x = knockback.x
 		velocity.z = knockback.z
-		knockback = knockback.move_toward(Vector3.ZERO, 14.0 * delta)
+		knockback = knockback.move_toward(Vector3.ZERO, (slide_decay if slide_end else 14.0) * delta)
+		if wall_launched and slide_end and is_on_floor() and knockback.length() > 4.0:
+			skid_t -= delta
+			if skid_t <= 0.0:
+				skid_t = 0.07
+				var tr := get_tree()
+				var rt: Node = tr.current_scene if tr.current_scene != null else get_parent()
+				GroundImpact.skid(tr, rt, global_position, knockback.normalized(), clampf(knockback.length() / 14.0, 0.5, 1.5))
 	elif action.begins_with("Dash"):
 		# ออกตัวแรงแล้วเบรก: v ~ (1-t)^1.5, ระยะรวม = v0 * len / 2.5
-		var t01 := 1.0 - action_time / float(ACTION_LEN[action])
+		var t01 := 1.0 - action_time / float(alen[action])
 		var dist := dash_distance if action == "DashF" else dash_back_distance
-		var v0 := 2.5 * dist / float(ACTION_LEN[action])
+		var v0 := 2.5 * dist / float(alen[action])
 		var v := v0 * pow(1.0 - clampf(t01, 0.0, 1.0), 1.5)
 		velocity.x = dash_dir.x * v
 		velocity.z = dash_dir.z * v
@@ -470,7 +512,7 @@ func _physics_process(delta: float) -> void:
 
 	# ระหว่าง Dash ตัวละครหายไป (เหมือนวาร์ป) แล้วโผล่พร้อมเอฟเฟกต์ที่ปลายทาง
 	if action.begins_with("Dash"):
-		var dt01 := 1.0 - action_time / float(ACTION_LEN[action])
+		var dt01 := 1.0 - action_time / float(alen[action])
 		model.visible = dt01 < 0.14 or dt01 > 0.72
 		if not dash_warped and dt01 > 0.72:
 			dash_warped = true
@@ -554,18 +596,44 @@ func _confine_to_arena(delta: float) -> void:
 		velocity.x -= outv * n.x
 		velocity.z -= outv * n.y
 	var outk := knockback.x * n.x + knockback.z * n.y
+	if wall_launched and outk > 6.0:
+		wall_launched = false
+		slide_end = false
+		_wall_slam(Vector3(n.x, 0.0, n.y), outk)
 	if outk > 0.0:
 		knockback.x -= outk * n.x
 		knockback.z -= outk * n.y
+
+
+## ถูกซัดจนชนขอบลาน: ก้อนหินแตกกระจาย รอยร้าวบนผนัง ฝุ่น กล้องสั่นแรง + เสียหายเพิ่ม
+func _wall_slam(n_out: Vector3, speed: float) -> void:
+	var inward := -n_out
+	var pos := global_position + Vector3.UP * 1.1 + n_out * 0.4
+	var tree := get_tree()
+	var root: Node = tree.current_scene if tree.current_scene != null else get_parent()
+	var pw := clampf(speed / 18.0, 0.7, 1.4)
+	GroundImpact._rocks(tree, root, pos, inward, pw * 1.5)
+	GroundImpact._rocks(tree, root, pos + Vector3.UP * 0.5, inward, pw)
+	GroundImpact._crack(tree, root, pos + n_out * 0.1, GroundImpact._basis_from_up(inward), 1.1)
+	GroundImpact._dust_plume(tree, root, pos, GroundImpact._basis_from_up(inward), pw)
+	GroundImpact._grit(tree, root, pos, GroundImpact._basis_from_up(inward), pw)
+	Vfx.ring(self, pos, inward, Color(1, 1, 1, 0.9), 0.4, 4.5, 0.3)
+	Vfx.ring(self, pos, inward, Color(0.9, 0.8, 0.6, 0.8), 0.3, 3.0, 0.45)
+	Vfx.sparks(self, pos, Color(1.0, 0.9, 0.6), 24, 9.0)
+	GroundImpact.spawn(self, global_position, 0.8)
+	_sfx_stream(SLAM_SFX, 6.0, randf_range(0.8, 0.9))
+	_damage(damage_heavy * 0.6)
+	shake = maxf(shake, 2.0)
+	_hitstop(0.14)
 
 
 ## ความเร็วพุ่งไปข้างหน้าของท่าที่กำลังเล่น: พุ่งแรงช่วงต้นท่าแล้วค่อยๆ หยุด
 func _lunge_speed() -> float:
 	if action == "":
 		return 0.0
-	var t01 := 1.0 - action_time / float(ACTION_LEN[action])
-	if action in LUNGE:
-		return punch_lunge * LUNGE[action] * sin(PI * FighterRig.lunge_k(action, t01))
+	var t01 := 1.0 - action_time / float(alen[action])
+	if action in lunge_t:
+		return punch_lunge * lunge_t[action] * sin(PI * FighterRig.lunge_k(action, t01))
 	if action == "JumpKick":
 		return kick_lunge * (1.0 - smoothstep(0.5, 1.0, t01))
 	return 0.0
@@ -573,7 +641,7 @@ func _lunge_speed() -> float:
 
 func _start_action(a: String) -> void:
 	# ออกท่าโจมตี: คู่ต่อสู้อยู่ใกล้ -> หันหาเอง, ไม่งั้นหันตามทิศที่กดค้าง
-	if a in HIT_FRAC:
+	if a in hitf:
 		var to_opp := _to_opponent()
 		var input := _move_input()
 		if to_opp.length() > 0.1 and to_opp.length() <= lock_on_range:
@@ -582,12 +650,15 @@ func _start_action(a: String) -> void:
 			var d := _cam_basis() * Vector3(input.x, 0, input.y)
 			model.rotation.y = atan2(d.x, d.z)
 	action = a
-	action_time = ACTION_LEN[a]
+	action_time = alen[a]
 	action_elapsed = 0.0
 	hit_done = false
-	if a in HIT_FRAC:
+	hit2_done = false
+	if a in hitf:
 		_punch_vfx(a)
-	if a in HIT_FRAC and fire_l:
+	if a in hitf and fire_l and char_data.get("wings", false):
+		_wing_fx(a)
+	elif a in hitf and fire_l:
 		match a:
 			"Punch1": fire_l.boost(1.0)
 			"Punch2": fire_r.boost(1.0)
@@ -595,10 +666,26 @@ func _start_action(a: String) -> void:
 			"JumpKick":
 				fire_l.boost(0.6)
 				fire_r.boost(0.6)
-	if a in HIT_FRAC:
+	if a in hitf:
 		_sfx("whoosh_heavy" if a in HEAVY else "whoosh_light", -4.0, randf_range(0.92, 1.08))
 	_play(a, 0.05, 1.0, true)
 
+
+## ปีกพลังงานของเป็ดราชาตามท่า: หมุนปัดปีก / กระโดดตบ / พายุหมุน / ดิ่งใส่
+func _wing_fx(a: String) -> void:
+	match a:
+		"Punch1":
+			fire_l.boost(1.0, "flurry", 0.34)
+			fire_r.boost(1.0, "flurry", 0.34)
+		"Punch2":
+			fire_l.boost(1.4, "rise", 0.3)
+			fire_r.boost(1.4, "rise", 0.3)
+		"Punch3":
+			fire_l.boost(3.0, "smash", 0.44)
+			fire_r.boost(3.0, "smash", 0.44)
+		"JumpKick":
+			fire_l.boost(2.0, "slam")
+			fire_r.boost(2.0, "slam")
 
 func _play(anim_name: String, blend: float, speed := 1.0, restart := false) -> void:
 	if anim_player == null or anim_name == "" or not anim_player.has_animation(anim_name):
@@ -611,11 +698,11 @@ func _play(anim_name: String, blend: float, speed := 1.0, restart := false) -> v
 
 # ---------- ต่อยโดน / เอฟเฟกต์ ----------
 
-func _try_hit() -> void:
+func _try_hit(is_extra := false) -> void:
 	var fwd := model.global_basis.z
 	fwd.y = 0
 	fwd = fwd.normalized()
-	var heavy := action in HEAVY
+	var heavy := action in HEAVY and (is_extra or not extra_hits.has(action))
 	var reach := hit_range + (0.3 if action == "JumpKick" else 0.0)
 	for e in ([opponent] if opponent and is_instance_valid(opponent) else []):
 		var to: Vector3 = e.global_position - global_position
@@ -624,6 +711,15 @@ func _try_hit() -> void:
 			continue
 		var dmg: float = damage_heavy if heavy else damage_light
 		var blocked: bool = e.take_hit(fwd, heavy, dmg)
+		if not blocked and launch_t.has(action) and (is_extra or not extra_hits.has(action)):
+			# ซัดกระเด็นไกลไปชนขอบลาน
+			e.knockback = fwd * float(launch_t[action])
+			e.velocity.y = 4.5
+			e.wall_launched = true
+			e.knockdown_pending = true
+		elif not blocked and pop_t.has(action):
+			e.velocity.y = float(pop_t[action])
+			e.knockback = fwd * 1.0
 		var hud = get_tree().get_first_node_in_group("hud")
 		if hud and not blocked:
 			hud.add_combo(player_index)
@@ -776,6 +872,8 @@ func _start_warp_dive() -> void:
 		wd_buffer = false
 		wd_kick_buffer = false
 		wd_drift = 0.0
+		wd_e_off = Vector3.ZERO
+		wd_detached = false
 		wd_flurry = false
 		wd_target.frozen = true                 # จับศัตรูลอยค้างไว้ระหว่างรัวหมัด
 		wd_target.velocity = Vector3.ZERO
@@ -828,7 +926,7 @@ func _ground_below(p: Vector3) -> float:
 func _enemy_air_pos(t: float) -> Vector3:
 	var k := clampf((t - WD_LAUNCH_HIT) / WD_ENEMY_UP, 0.0, 1.0)
 	k = 1.0 - pow(1.0 - k, 3.0)
-	return wd_enemy_start.lerp(wd_air_pos, k) + Vector3.UP * wd_drift
+	return wd_enemy_start.lerp(wd_air_pos, k) + Vector3.UP * wd_drift + wd_e_off
 
 
 func _warp_dive_tick(delta: float) -> void:
@@ -945,7 +1043,8 @@ func _warp_dive_tick(delta: float) -> void:
 			_play("FightIdle", 0.15)
 		if wd_punch_t > 0.3:
 			model.rotation.x = lerpf(model.rotation.x, 0.0, clampf(8.0 * delta, 0.0, 1.0))
-		global_position = e.global_position + wd_rush_off
+		if not wd_detached:
+			global_position = e.global_position + wd_rush_off
 		if wd_kick_buffer and wd_punch_t >= 0.1:
 			wd_kick_buffer = false
 			wd_t_final = t                          # เริ่มท่าทุบลง
@@ -1007,6 +1106,8 @@ func _warp_dive_tick(delta: float) -> void:
 
 ## วาร์ปไปจุดถัดไปรอบตัวศัตรู: คู่ = ระดับเดียวกัน (หมัดตรง), คี่ = ลอยเหนือหัวเอียงทิ่มลง
 func _rush_warp(e, i: int) -> void:
+	wd_detached = false
+	model.visible = true
 	var right := wd_s.cross(Vector3.UP).normalized()
 	var dirs := [-wd_s, right, wd_s, -right, (-wd_s + right).normalized(), (wd_s + right).normalized(),
 		(wd_s - right).normalized(), (-wd_s - right).normalized()]
@@ -1029,23 +1130,118 @@ func _rush_warp(e, i: int) -> void:
 	model.visible = true
 	_play("AirPunch1" if i % 2 == 0 else "AirPunch2", 0.02, 1.6, true)
 	var fire = fire_l if i % 2 == 0 else fire_r
-	if fire:
+	if fire and char_data.get("wings", false):
+		fire_l.boost(1.5, "cutter", 0.2)
+		fire_r.boost(1.5, "cutter", 0.2)
+	elif fire:
 		fire.boost(1.8)
 	var c := global_position + Vector3.UP * 1.0
 	Vfx.sparks(self, old + Vector3.UP * 1.0, vfx_color, 5, 3.0)
 	Vfx.speed_lines(self, old + Vector3.UP * 1.0, c, Color(1, 1, 1, 0.8), 8, 0.5, 0.03, 0.2)
 	_sfx("whoosh_light", -6.0, randf_range(1.15, 1.45))
+	if char_data.get("wings", false):
+		hit_done = true                              # เป็ดใช้ชุดวาปหลายจุดแทนหมัดเดียว
+		_duck_warp_flurry(e, i)
+
+
+## เป็ดราชา (สไตล์ดราก้อนบอล): ตีศัตรูกระเด็นไกล -> หายตัววาปตามไปดักหน้าอีกฝั่ง -> ตีส่งกลับ (3 จุด)
+func _duck_warp_flurry(e, i: int) -> void:
+	var tag := wd_rush_i
+	var hits := 3
+	for k in hits:
+		await get_tree().create_timer(0.06 if k == 0 else 0.07, true, false, true).timeout
+		if not is_instance_valid(e) or tag != wd_rush_i or not wd_air_started or wd_flurry:
+			wd_detached = false
+			model.visible = true
+			return
+		# ตีจุดนี้
+		var hit_dir := wd_rush_d
+		_rush_hit(e, hit_dir, false, 0.6)
+		if k == hits - 1:
+			# ครั้งสุดท้าย: ซัดกระเด็นแล้วค่อยลอยกลับมาจุดเดิม เพื่อไม่ให้ศัตรูไหลออกนอกลานเมื่อกดต่อเนื่อง
+			if wd_off_tw and wd_off_tw.is_valid():
+				wd_off_tw.kill()
+			var tw_back := create_tween()
+			wd_off_tw = tw_back
+			tw_back.tween_property(self, "wd_e_off", Vector3.ZERO, 0.5).set_trans(Tween.TRANS_SINE)
+			wd_punch_t = 0.0
+			return
+		# --- ซัดศัตรูกระเด็นไกล ---
+		var fling := Vector3(hit_dir.x, 0.0, hit_dir.z).normalized() * randf_range(4.0, 5.2)
+		fling.y = randf_range(-0.2, 1.0)
+		var base := Vector3(wd_air_pos.x, 0.0, wd_air_pos.z)
+		var tgt := base + wd_e_off + fling
+		tgt.y = 0.0
+		if tgt.length() > 6.2:
+			tgt = tgt.normalized() * 6.2
+		var new_off := Vector3(tgt.x - base.x, fling.y + wd_e_off.y * 0.5, tgt.z - base.z)
+		if wd_off_tw and wd_off_tw.is_valid():
+			wd_off_tw.kill()
+		var tw := create_tween()
+		wd_off_tw = tw
+		tw.tween_property(self, "wd_e_off", new_off, 0.17).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		Vfx.speed_lines(self, e.global_position + Vector3.UP * 1.0, e.global_position + Vector3.UP * 1.0 + fling, Color(1, 1, 1, 0.8), 8, 0.4, 0.03, 0.25)
+		wd_detached = true                          # เป็ดยืนอยู่ที่เดิมแป๊บหนึ่ง
+		wd_punch_t = 0.0
+		await get_tree().create_timer(0.17, true, false, true).timeout
+		if not is_instance_valid(e) or tag != wd_rush_i or not wd_air_started or wd_flurry:
+			wd_detached = false
+			model.visible = true
+			return
+		# --- หายตัว (วาปไกล) ---
+		var old := global_position
+		Vfx.streak(self, old + Vector3.UP * 1.0, e.global_position + Vector3.UP * 1.2, vfx_color, 0.45, 0.22, true)
+		Vfx.ring(self, old + Vector3.UP * 1.0, Vector3.UP, Color(1, 0.95, 0.7, 0.9), 0.2, 1.3, 0.2)
+		Vfx.sparks(self, old + Vector3.UP * 1.0, vfx_color, 8, 5.0)
+		model.visible = false
+		await get_tree().create_timer(0.06, true, false, true).timeout
+		if not is_instance_valid(e) or tag != wd_rush_i or not wd_air_started or wd_flurry:
+			wd_detached = false
+			model.visible = true
+			return
+		# --- โผล่ดักหน้าศัตรู (อยู่ฝั่งตรงข้ามทิศที่ถูกซัดไป สลับระดับ ข้าง/บน/ล่าง) ---
+		var ahead := Vector3(fling.x, 0.0, fling.z).normalized()
+		var ang := atan2(ahead.z, ahead.x) + randf_range(-0.9, 0.9)
+		var d := Vector3(cos(ang), 0.0, sin(ang))
+		var mode := randi() % 3
+		var face := -d
+		var yaw := atan2(face.x, face.z)
+		var tilt := deg_to_rad(warp_dive_angle)
+		if mode == 1:
+			var hip: Vector3 = d * 0.85 + Vector3.UP * 1.65
+			wd_rush_off = hip - (face * sin(tilt) + Vector3.UP * cos(tilt)) * 0.73
+			model.rotation = Vector3(tilt, yaw, 0.0)
+			wd_rush_d = face
+		elif mode == 2:
+			wd_rush_off = d * 0.9 + Vector3.DOWN * 0.55
+			model.rotation = Vector3(-tilt * 0.5, yaw, 0.0)
+			wd_rush_d = (face + Vector3.UP * 0.6).normalized()
+		else:
+			wd_rush_off = d * 0.95
+			model.rotation = Vector3(0.0, yaw, 0.0)
+			wd_rush_d = face
+		wd_detached = false
+		global_position = e.global_position + wd_rush_off
+		model.visible = true
+		_play("AirPunch1" if (i + k) % 2 == 0 else "AirPunch2", 0.02, 1.6, true)
+		if fire_l:
+			fire_l.boost(1.5, "cutter", 0.2)
+			fire_r.boost(1.5, "cutter", 0.2)
+		var c2 := global_position + Vector3.UP * 1.0
+		Vfx.ring(self, c2, Vector3.UP, Color(1, 0.95, 0.7, 0.9), 0.2, 1.3, 0.2)
+		Vfx.sparks(self, c2, vfx_color, 8, 5.0)
+		_sfx("whoosh_light", -4.0, randf_range(1.3, 1.6))
 
 
 ## หมัดระหว่างรัว (launch = อัปเปอร์คัตเปิดฉาก)
-func _rush_hit(e, dir: Vector3, launch: bool) -> void:
+func _rush_hit(e, dir: Vector3, launch: bool, dmg_scale := 1.0) -> void:
 	wd_e_stun = 0.0
 	if wd_counter_t >= 0.0:
 		wd_counter_t = -1.0                        # ต่อยแทรกทัน = ขัดหมัดสวนของศัตรู
 		Vfx.ring(self, e.global_position + Vector3.UP * 1.3, dir, Color(1, 1, 1, 0.8), 0.3, 1.8, 0.2)
 	e.is_blocking = false
 	e.block_time = 0.0
-	e.take_hit(dir, launch, air_rush_damage * (1.5 if launch else 1.0))
+	e.take_hit(dir, launch, air_rush_damage * (1.5 if launch else 1.0) * dmg_scale)
 	e.velocity = Vector3.ZERO
 	e.knockback = Vector3.ZERO
 	var hud = get_tree().get_first_node_in_group("hud")
@@ -1084,6 +1280,15 @@ func _warp_dive_hit() -> void:
 		if wd_rush and "slam_pending" in e:
 			e.slam_pending = true               # ตกถึงพื้น = ฝุ่นตลบ หินกระเด็น
 		e.knockback = dir * 3.5
+		if wd_rush and char_data.get("wings", false):
+			# จบคอมโบกลางอากาศ: ทุบร่วงแล้วไถลไปตามพื้น (หิน/ฝุ่นไถล) จนชนขอบลาน
+			var sl := Vector3(dir.x, 0.0, dir.z)
+			if sl.length() < 0.1:
+				sl = Vector3(model.global_transform.basis.z.x, 0.0, model.global_transform.basis.z.z)
+			e.knockback = sl.normalized() * 17.0
+			e.wall_launched = true
+			e.slide_end = true
+			e.slide_decay = 7.0
 		e.velocity.y = -11.0 if wd_rush else 2.2    # ทุบร่วงจากฟ้า
 		var hit_pos: Vector3 = e.global_position + Vector3.UP * 1.4
 		Vfx.ring(self, hit_pos, (dir + Vector3.DOWN).normalized(), vfx_color, 0.25, 2.0, 0.3)
@@ -1183,7 +1388,10 @@ func _enemy_rush_warp(e, i: int) -> void:
 		Vfx.sparks(self, old + Vector3.UP * 1.0, col, 5, 3.0)
 		Vfx.speed_lines(self, old + Vector3.UP * 1.0, np + Vector3.UP * 1.0, Color(0.85, 0.93, 1.0, 0.8), 8, 0.5, 0.03, 0.2)
 	var fire = e.fire_l if i % 2 == 0 else e.fire_r
-	if fire:
+	if fire and e.char_data.get("wings", false):
+		e.fire_l.boost(1.5, "cutter", 0.2)
+		e.fire_r.boost(1.5, "cutter", 0.2)
+	elif fire:
 		fire.boost(1.8)
 	_sfx("whoosh_light", -6.0, randf_range(1.1, 1.4))
 
@@ -1234,6 +1442,11 @@ func _release_enemy() -> void:
 	if wd_holding and wd_target and is_instance_valid(wd_target):
 		wd_target.frozen = false
 	wd_holding = false
+	if wd_off_tw and wd_off_tw.is_valid():
+		wd_off_tw.kill()
+	wd_e_off = Vector3.ZERO
+	wd_detached = false
+	model.visible = true
 
 
 func _restore_camera() -> void:
@@ -1243,6 +1456,8 @@ func _restore_camera() -> void:
 # ---------- ไฟที่มือ ----------
 
 func _attach_fire(side: int) -> Node3D:
+	if char_data.get("wings", false):
+		return GameState.attach_wings(rig, side)
 	var skel: Skeleton3D = rig._skel
 	var att := BoneAttachment3D.new()
 	att.bone_name = skel.get_bone_name(rig._b(side, "Hand"))

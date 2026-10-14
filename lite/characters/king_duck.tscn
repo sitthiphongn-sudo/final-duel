@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://characters/king_duck/king_duck.glb" id="1_duck"]
+[ext_resource type="Script" path="res://scripts/duck_look.gd" id="2_look"]
+
+[node name="KingDuck" type="Node3D"]
+
+[node name="Duck" parent="." instance=ExtResource("1_duck")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.0, 0)
+
+[node name="Look" type="Node3D" parent="."]
+script = ExtResource("2_look")

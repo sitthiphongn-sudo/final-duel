@@ -151,12 +151,15 @@ func _show_model(id: String) -> void:
 		var m := ps.instantiate() as Node3D
 		stage.add_child(m)
 		var ap := m.find_child("AnimationPlayer", true, false) as AnimationPlayer
-		var rig = FighterRig.new()
+		var rig = GameState.make_rig(d)
 		var e := {"node": m, "rig": rig, "fire": []}
 		if ap and rig.setup(m, ap):
 			rig.build_all(ANIM_LEN)
-			ap.play("FightIdle")
-			if rig._skel:
+			ap.play("MenuIdle" if ap.has_animation("MenuIdle") else "FightIdle")
+			if rig._skel and d.get("wings", false):
+				for side in [1, -1]:
+					e["fire"].append(GameState.attach_wings(rig, side))
+			elif rig._skel:
 				for side in [1, -1]:
 					var att := BoneAttachment3D.new()
 					att.bone_name = rig._skel.get_bone_name(rig._b(side, "Hand"))
