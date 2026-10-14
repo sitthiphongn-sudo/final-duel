@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>Arena</title>
+		<title>Final Duel</title>
 		<style>
 html, body, #canvas {
 	margin: 0;
@@ -38,7 +38,7 @@ body {
 }
 
 #status {
-	background-color: #242424;
+	background-color: #0b0f18;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
@@ -71,10 +71,21 @@ body {
 }
 
 #status-progress {
-	bottom: 10%;
-	width: 50%;
+	bottom: 9%;
+	width: 46%;
+	height: 10px;
 	margin: 0 auto;
+	appearance: none;
+	-webkit-appearance: none;
+	border: 0;
+	border-radius: 5px;
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.12);
+	accent-color: #ff8a1f;
 }
+#status-progress::-webkit-progress-bar { background: rgba(255, 255, 255, 0.12); }
+#status-progress::-webkit-progress-value { background: #ff8a1f; border-radius: 5px; }
+#status-progress::-moz-progress-bar { background: #ff8a1f; border-radius: 5px; }
 
 #status-notice {
 	background-color: #5b3943;
@@ -111,7 +122,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":38175488,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":40030992,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
