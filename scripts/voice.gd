@@ -25,6 +25,8 @@ const LINES := {
 
 ## ฟอนต์ระบบของ Windows (ฟอนต์เริ่มต้นของ Godot ไม่มีตัวอักษรญี่ปุ่น/ไทย)
 const JP_FONTS := ["C:/Windows/Fonts/YuGothM.ttc", "C:/Windows/Fonts/meiryo.ttc", "C:/Windows/Fonts/msgothic.ttc"]
+const JP_BUNDLED := preload("res://fonts/MPLUSRounded1c-Medium.woff2")   # ใช้บนเว็บ/เครื่องที่ไม่มีฟอนต์ Windows
+const TH_BUNDLED := preload("res://fonts/Loma.otf")
 const TH_FONTS := ["C:/Windows/Fonts/leelawui.ttf", "C:/Windows/Fonts/tahoma.ttf", "C:/Windows/Fonts/upcjl.ttf"]
 
 @export var volume_db := 2.0
@@ -90,8 +92,8 @@ func _build_ui() -> void:
 	box.visible = false
 	ui.add_child(box)
 
-	var jp_font := _load_font(JP_FONTS)
-	var th_font := _load_font(TH_FONTS, jp_font)
+	var jp_font := _load_font(JP_FONTS, JP_BUNDLED)
+	var th_font := _load_font(TH_FONTS, TH_BUNDLED, jp_font)
 
 	label_jp = Label.new()
 	label_jp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -115,12 +117,16 @@ func _build_ui() -> void:
 
 
 ## โหลดฟอนต์จากเครื่อง (ตัวแรกที่เจอ) พร้อมฟอนต์สำรองสำหรับตัวอักษรที่ไม่มี
-func _load_font(paths: Array, fallback: Font = null) -> Font:
+func _load_font(paths: Array, bundled: Font, extra: Font = null) -> Font:
 	for p in paths:
 		if FileAccess.file_exists(p):
 			var f := FontFile.new()
 			f.load_dynamic_font(p)
-			if fallback:
-				f.fallbacks = [fallback]
+			f.fallbacks = [bundled] if extra == null else [bundled, extra]
 			return f
-	return fallback
+	if extra != null and bundled != extra:
+		var v := FontVariation.new()
+		v.base_font = bundled
+		v.fallbacks = [extra]
+		return v
+	return bundled

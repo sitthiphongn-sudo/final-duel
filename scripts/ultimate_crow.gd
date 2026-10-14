@@ -150,7 +150,7 @@ func start() -> void:
 		if not is_instance_valid(enemy):
 			break
 		var gp := Vector3(enemy.global_position.x, ground_y, enemy.global_position.z)
-		GroundImpact._rocks(tree, root_n, gp + Vector3.UP * 0.2, Vector3.UP, 0.9)
+		GroundImpact._rocks(tree, root_n, gp + Vector3.UP * 0.2, Vector3.UP, 0.45)
 		GroundImpact._dust_plume(tree, root_n, gp, Basis.IDENTITY, 0.8)
 		if k == 2:
 			Engine.time_scale = 1.0
@@ -224,7 +224,7 @@ func _moon_hit(ep: Vector3) -> void:
 	var tree := get_tree()
 	var root: Node = tree.current_scene
 	GroundImpact.spawn(player, g, 1.6)
-	GroundImpact._rocks(tree, root, g + Vector3.UP * 0.3, Vector3.UP, 1.6)
+	GroundImpact._rocks(tree, root, g + Vector3.UP * 0.3, Vector3.UP, 0.8)
 	GroundImpact._crack(tree, root, g + Vector3.UP * 0.02, Basis.IDENTITY, 2.4)
 	GroundImpact._dust_plume(tree, root, g, Basis.IDENTITY, 1.5)
 	Vfx.ring(player, g + Vector3.UP * 0.1, Vector3.UP, Color(1, 1, 1, 0.9), 0.5, 7.0, 0.4)
