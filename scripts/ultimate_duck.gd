@@ -36,140 +36,152 @@ func start() -> void:
 	enemy.model.rotation.y = atan2(-fwd.x, -fwd.z)
 	cam.current = true
 	_tw(self, "letterbox", 1.0, 0.25)
-	_tw(self, "dim", 0.3, 0.25)
+	_tw(self, "dim", 0.45, 0.25)
 	_flash(GOLD, 0.5, 0.35)
 	_sfx(SND.hit_heavy, -4.0)
 
 	var ground_y: float = player.global_position.y
 	var ep: Vector3 = enemy.global_position
 	var e_ground: float = ep.y
+	var wl = player.fire_l
+	var wr = player.fire_r
 
-	# ---------- 1) Coronation: กล้องวนรอบเป็ดจากมุมต่ำ ----------
+	# ---------- 1) Awakening: ปีกทองกางยักษ์ กล้องไต่ขึ้นจากเท้าถึงมงกุฎ ----------
 	var p0: Vector3 = player.global_position
 	glow = OmniLight3D.new()
 	glow.light_color = GOLD
 	glow.light_energy = 0.0
-	glow.omni_range = 7.0
+	glow.omni_range = 8.0
 	_scene().add_child(glow)
 	glow.global_position = p0 + Vector3.UP * 1.4
-	_tw(glow, "light_energy", 6.0, 1.6, Tween.EASE_IN)
+	_tw(glow, "light_energy", 7.0, 1.8, Tween.EASE_IN)
 	player._play("UltCharge", 0.1, 0.85, true)
 	_sfx(SND.charge, 2.0)
 	charging = false
 	shot_t = 0.0
-	_tw(self, "shot_t", 1.0, 2.0, Tween.EASE_IN_OUT, Tween.TRANS_SINE)
-	cam.fov = 46.0
+	_tw(self, "shot_t", 1.0, 2.1, Tween.EASE_IN_OUT, Tween.TRANS_SINE)
+	cam.fov = 40.0
 	cam_fn = func() -> Transform3D:
 		var pp: Vector3 = player.global_position
-		var dist := lerpf(3.4, 2.5, shot_t)
-		var h := lerpf(0.4, 1.1, shot_t)
-		var off := (fwd * 0.9 + right * lerpf(-1.8, 1.8, shot_t)).normalized() * dist
-		var head: Vector3 = _bone_pos(player, "Head")
-		return Transform3D(Basis(), pp + off + Vector3.UP * h).looking_at(head.lerp(pp + Vector3.UP * 0.8, 0.3), Vector3.UP)
-	var t_end := Time.get_ticks_msec() + 2000
+		var dist := lerpf(2.2, 4.4, shot_t)
+		var h := lerpf(0.15, 1.5, shot_t)
+		var off := (fwd * 1.0 + right * lerpf(-1.2, 1.4, shot_t)).normalized() * dist
+		return Transform3D(Basis(), pp + off + Vector3.UP * h).looking_at(pp + Vector3.UP * lerpf(0.5, 1.2, shot_t), Vector3.UP)
+	if wl:
+		await _wait(0.5)
+		wl.regal_mode(true, 2.3, 1.0)
+		wr.regal_mode(true, 2.3, 1.0)
+	var t_end := Time.get_ticks_msec() + 1700
 	var ring_t := 0.0
 	while Time.get_ticks_msec() < t_end:
-		cam_shake = maxf(cam_shake, lerpf(0.1, 0.55, shot_t))
-		if player.fire_l:
-			player.fire_l.boost(2.5, "rise", 0.5)
-			player.fire_r.boost(2.5, "rise", 0.5)
+		cam_shake = maxf(cam_shake, lerpf(0.1, 0.5, shot_t))
 		ring_t -= get_process_delta_time()
 		if ring_t <= 0.0:
-			ring_t = 0.28
-			Vfx.ring(player, p0 + Vector3.UP * 0.05, Vector3.UP, Color(GOLD.r, GOLD.g, GOLD.b, 0.8), 3.2, 0.4, 0.5)
-			Vfx.sparks(player, p0 + Vector3.UP * 0.4, GOLD, 8, 3.5)
+			ring_t = 0.24
+			Vfx.ring(player, p0 + Vector3.UP * 0.05, Vector3.UP, Color(GOLD.r, GOLD.g, GOLD.b, 0.8), 4.0, 0.45, 0.5)
+			Vfx.sparks(player, p0 + Vector3.UP * 0.4, GOLD, 10, 4.5)
+			Vfx.sparks(player, p0 + Vector3.UP * 1.6, Color.WHITE, 4, 2.5)
 		await get_tree().process_frame
 	cam_fn = Callable()
-	_flash(Color.WHITE, 0.8, 0.2)
-	cam_shake = 1.0
-	charging = false
+	_flash(Color.WHITE, 0.9, 0.2)
+	cam_shake = 1.2
+	_sfx(SND.hit_heavy, 0.0, 0.8)
 
-	# ---------- 2) Ascension: ทะยานขึ้น เสาแสงยกศัตรู ----------
+	# ---------- 2) Blink Barrage: วาปรอบศัตรู 8 จุด ปีกฟันทีละจุด ตัดกล้องรัว ----------
 	enemy.anim_player.speed_scale = 1.0
 	enemy.anim_player.play("Hit", 0.1)
+	var epl: Vector3 = ep + Vector3.UP * 1.3
+	_tw(enemy, "global_position", epl, 0.3, Tween.EASE_OUT, Tween.TRANS_QUAD)
 	pillar = _make_pillar(ep)
-	var up_pos := ep + Vector3.UP * 6.2
+	var base_ang := atan2(fwd.z, fwd.x) + PI
+	var angs := [0.0, 2.4, 4.7, 1.2, 3.6, 5.5, 0.6, 3.0]
+	var hs := [0.9, 2.0, 0.3, 2.4, 1.2, 0.2, 2.2, 1.0]
+	for i in 8:
+		var a := base_ang + float(angs[i])
+		var d := Vector3(cos(a), 0.0, sin(a))
+		var old: Vector3 = player.global_position
+		var at := epl + d * 2.0 + Vector3.UP * (float(hs[i]) - 1.0)
+		Vfx.ring(player, old + Vector3.UP, Vector3.UP, Color(GOLD.r, GOLD.g, GOLD.b, 0.9), 0.2, 1.6, 0.2)
+		Vfx.speed_lines(player, old + Vector3.UP, at + Vector3.UP, Color(1, 1, 0.8, 0.9), 10, 0.5, 0.03, 0.2)
+		player.global_position = at
+		var look := epl - at
+		player.model.rotation = Vector3(0.0, atan2(look.x, look.z), 0.0)
+		player._play("AirPunch1" if i % 2 == 0 else "AirPunch2", 0.02, 1.8, true)
+		_sfx(SND.dash, -3.0, randf_range(1.0, 1.35))
+		# กล้อง: สลับมุม ใกล้ / ข้าง / ต่ำ / เหนือหัว
+		var cdir := Vector3(cos(a + PI * 0.5), 0.0, sin(a + PI * 0.5))
+		match i % 4:
+			0: cam.global_transform = Transform3D(Basis(), epl + cdir * 3.2 + Vector3.UP * 0.5).looking_at(epl, Vector3.UP)
+			1: cam.global_transform = Transform3D(Basis(), epl - d * 3.0 + Vector3.UP * 1.9).looking_at(epl, Vector3.UP)
+			2: cam.global_transform = Transform3D(Basis(), epl - cdir * 2.6 + Vector3.UP * -0.9).looking_at(epl + Vector3.UP * 0.4, Vector3.UP)
+			3: cam.global_transform = Transform3D(Basis(), epl + d * 3.6 + Vector3.UP * 0.8).looking_at(epl, Vector3.UP)
+		cam.fov = 48.0 + 4.0 * float(i % 3)
+		await _wait(0.1)
+		# เส้นฟันทองตัดผ่านศัตรู
+		var sd := (epl - at).normalized()
+		var sw := sd.cross(Vector3.UP).normalized() * (1.0 if i % 2 == 0 else -1.0)
+		Vfx.streak(player, epl - sw * 1.3 + Vector3.UP * 0.6, epl + sw * 1.3 - Vector3.UP * 0.4, GOLD, 0.55, 0.25, true)
+		_gold_hit(epl, sd, 9.0 + i)
+		if i == 7:
+			_flash(Color.WHITE, 1.0, 0.15)
+		await _wait(0.2 if i < 6 else 0.3)
+
+	# ---------- 3) Uppercut: ปีกฟาดขึ้นฟ้า พาศัตรูพุ่งทะลุเมฆ ----------
+	var top := ep + Vector3.UP * 5.6
+	var hi := ep + Vector3.UP * 8.8 - fwd * 0.3
+	player.global_position = epl - fwd * 0.9 + Vector3.DOWN * 0.8
+	player.model.rotation = Vector3(0.0, atan2(fwd.x, fwd.z), 0.0)
 	player._play("JumpUp", 0.03, 1.0, true)
-	player.model.rotation = Vector3(0.0, atan2(fwd.x, fwd.z), 0.0)
-	_tw(player, "global_position", up_pos - fwd * 0.5, 0.5, Tween.EASE_OUT, Tween.TRANS_QUAD)
-	_tw(enemy, "global_position", ep + Vector3.UP * 1.3, 0.5, Tween.EASE_OUT, Tween.TRANS_QUAD)
-	_tw(glow, "global_position", up_pos, 0.5)
-	if player.fire_l:
-		player.fire_l.boost(4.0, "rise", 1.2)
-		player.fire_r.boost(4.0, "rise", 1.2)
-	_sfx(SND.dash, 0.0, 0.7)
-	cam.fov = 58.0
-	cam.global_transform = _pose(p0, Vector3(1.4, 0.2, -2.6), p0 + Vector3.UP * 1.2)
-	_tw(cam, "global_transform", _pose(p0, Vector3(3.0, 0.4, -1.6), ep + Vector3.UP * 3.4), 0.7, Tween.EASE_OUT)
-	await _wait(0.75)
+	_sfx(SND.hit_heavy, 0.0, 1.1)
+	_flash(GOLD, 0.7, 0.25)
+	cam_shake = 1.0
+	Vfx.ring(player, epl, Vector3.UP, Color(1, 1, 1, 0.9), 0.4, 5.0, 0.35)
+	_tw(enemy, "global_position", top, 0.55, Tween.EASE_OUT, Tween.TRANS_QUAD)
+	_tw(player, "global_position", top - fwd * 0.8 + Vector3.DOWN * 0.7, 0.5, Tween.EASE_OUT, Tween.TRANS_QUAD)
+	_tw(glow, "global_position", top, 0.5)
+	Vfx.streak(player, epl, top, GOLD, 1.2, 0.5, true)
+	cam.fov = 60.0
+	cam.global_transform = _pose(p0, Vector3(3.2, 0.3, -1.4), epl)
+	_tw(cam, "global_transform", _pose(p0, Vector3(3.6, 3.0, -0.8), top), 0.7, Tween.EASE_OUT)
+	await _wait(0.7)
 
-	# ---------- 3) Torpedo x3: ท้องไถลพุ่งทะลุศัตรู ----------
-	var epl: Vector3 = ep + Vector3.UP * 1.3          # ศัตรูลอยอยู่ตรงนี้
-	var base_ang := atan2(fwd.z, fwd.x)
-	for i in 3:
-		var a := base_ang + PI + (i - 1) * 2.1 + (0.35 if i == 1 else 0.0)
-		var d := Vector3(cos(a), 0.0, sin(a))               # ทิศที่เริ่มพุ่ง (ด้านที่เป็ดอยู่)
-		var from := epl + d * 5.0 + Vector3.UP * (2.2 + i * 0.6)
-		var to := epl - d * 5.0 + Vector3.UP * (0.5 - 0.2 * i + 1.6)
-		var dir := (to - from).normalized()
-		var yaw := atan2(dir.x, dir.z)
-		var pitch := asin(clampf(-dir.y, -1.0, 1.0))
-		if player.fire_l:
-			Vfx.ring(player, player.global_position + Vector3.UP, Vector3.UP, Color(GOLD.r, GOLD.g, GOLD.b, 0.9), 0.2, 1.4, 0.2)
-		player.global_position = from
-		player.model.rotation = Vector3(pitch, yaw, 0.0)
-		player._play("Run", 0.02, 1.2, true)
-		if player.fire_l:
-			player.fire_l.boost(3.0, "cutter", 0.3)
-			player.fire_r.boost(3.0, "cutter", 0.3)
-		_sfx(SND.dash, -2.0, randf_range(0.95, 1.2))
-		# กล้อง: ตั้งด้านข้างของแนวพุ่ง มองจุดที่ชน
-		var side_dir := dir.cross(Vector3.UP).normalized() * (1.0 if i % 2 == 0 else -1.0)
-		cam.fov = 52.0
-		cam.global_transform = Transform3D(Basis(), epl + side_dir * 3.3 + Vector3.UP * 0.7).looking_at(epl + Vector3.UP * 0.2, Vector3.UP)
-		Vfx.streak(player, from + Vector3.UP * 0.3, to + Vector3.UP * 0.3, GOLD, 0.6, 0.4, true)
-		_tw(player, "global_position", to, 0.34, Tween.EASE_IN, Tween.TRANS_QUAD)
-		await _wait(0.2)
-		_gold_hit(epl, -dir, 24.0)
-		await _wait(0.34)
-		if i == 2:
-			cam_shake = 0.6
-	player.model.rotation = Vector3(0.0, atan2(fwd.x, fwd.z), 0.0)
-
-	# ---------- 4) Crown Call: ลอยสูง ปีกยักษ์ วงแหวนทองหดเข้า ----------
-	var hi := ep + Vector3.UP * 7.4 - fwd * 0.3
-	Vfx.ring(player, player.global_position + Vector3.UP, Vector3.UP, GOLD_SOFT, 0.3, 2.0, 0.3)
+	# ---------- 4) Crown Call: ลอยสูงเหนือศัตรู ปีกเต็มบาน วงแหวนทองหดเข้า ----------
+	Vfx.ring(player, player.global_position + Vector3.UP, Vector3.UP, GOLD_SOFT, 0.3, 2.4, 0.3)
 	player.global_position = hi
 	player.model.rotation = Vector3(0.0, atan2(fwd.x, fwd.z), 0.0)
 	player._play("UltWindup", 0.08, 0.8, true)
 	_sfx(SND.charge, 0.0, 0.85)
-	_tw(self, "dim", 0.5, 1.2)
+	if wl:
+		wl.regal_mode(true, 3.0, 0.5)
+		wr.regal_mode(true, 3.0, 0.5)
+	_tw(self, "dim", 0.55, 1.0)
 	_tw(glow, "global_position", hi, 0.1)
-	_tw(glow, "light_energy", 9.0, 1.2)
+	_tw(glow, "light_energy", 10.0, 1.0)
 	cam.fov = 56.0
-	cam.global_transform = Transform3D(Basis(), ep + right * 5.2 + fwd * 1.0 + Vector3.UP * 0.4).looking_at(ep + Vector3.UP * 4.2, Vector3.UP)
-	_tw(cam, "global_transform", Transform3D(Basis(), ep + right * 4.0 + fwd * 1.6 + Vector3.UP * 0.2).looking_at(hi + Vector3.DOWN * 1.2, Vector3.UP), 1.3, Tween.EASE_IN_OUT)
-	var wind_end := Time.get_ticks_msec() + 1300
+	cam.global_transform = Transform3D(Basis(), hi + fwd * 5.0 + Vector3.DOWN * 1.2).looking_at(hi + Vector3.UP * 0.2, Vector3.UP)
+	_tw(cam, "global_transform", Transform3D(Basis(), hi + fwd * 7.5 + Vector3.UP * 0.4).looking_at(hi, Vector3.UP), 1.1, Tween.EASE_IN_OUT)
+	var wind_end := Time.get_ticks_msec() + 1100
 	var rt := 0.0
-	var rad := 4.0
+	var rad := 5.0
 	while Time.get_ticks_msec() < wind_end:
-		if player.fire_l:
-			player.fire_l.boost(4.0, "smash", 0.6)
-			player.fire_r.boost(4.0, "smash", 0.6)
 		rt -= get_process_delta_time()
 		if rt <= 0.0:
-			rt = 0.22
+			rt = 0.2
 			Vfx.ring(player, Vector3(ep.x, e_ground + 0.06, ep.z), Vector3.UP, Color(GOLD.r, GOLD.g, GOLD.b, 0.9), rad, 0.5, 0.45)
-			rad = maxf(2.0, rad - 0.3)
+			Vfx.sparks(player, hi + Vector3.UP * 0.4, GOLD, 10, 5.0)
+			rad = maxf(2.0, rad - 0.5)
 		cam_shake = maxf(cam_shake, 0.2)
 		await get_tree().process_frame
+	if wl:
+		wl.regal_mode(false, 1.0, 0.25)
+		wr.regal_mode(false, 1.0, 0.25)
 
 	# ---------- 5) Royal Stomp: ดิ่งทับ ----------
 	_tw(self, "dim", 0.15, 0.25)
 	player._play("JumpKick", 0.02, 1.0, true)
 	player.model.rotation = Vector3(deg_to_rad(55.0), atan2(fwd.x, fwd.z), 0.0)
 	cam.fov = 66.0
-	cam.global_transform = Transform3D(Basis(), ep + right * 3.6 - fwd * 0.5 + Vector3.UP * 1.2).looking_at(ep + Vector3.UP * 3.4, Vector3.UP)
+	cam.global_transform = Transform3D(Basis(), ep + right * 5.0 - fwd * 0.5 + Vector3.UP * 4.5).looking_at(ep + Vector3.UP * 5.0, Vector3.UP)
 	var land := Vector3(ep.x, ground_y, ep.z) - fwd * 0.3
 	_tw(player, "global_position", land + Vector3.UP * 0.8, 0.26, Tween.EASE_IN, Tween.TRANS_QUAD)
 	_tw(enemy, "global_position", Vector3(ep.x, e_ground, ep.z), 0.26, Tween.EASE_IN, Tween.TRANS_QUAD)

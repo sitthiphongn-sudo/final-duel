@@ -362,6 +362,9 @@ func air_counter_pressed() -> bool:
 
 func _physics_process(delta: float) -> void:
 	if in_ult or frozen:
+		if fire_l and char_data.get("wings", false) and not in_ult:
+			fire_l.guard(false)
+			fire_r.guard(false)
 		return   # ระหว่างอัลติเมต / ถูกจับลอยค้าง -> อีกฝ่ายควบคุมตำแหน่งเอง
 	if action == "WarpDive":
 		_warp_dive_tick(delta)
@@ -384,6 +387,9 @@ func _physics_process(delta: float) -> void:
 	var can_act: bool = action == "" or action == "Land" \
 		or (action.begins_with("Dash") and action_time < alen[action] * 0.35)
 	is_blocking = _held("block") and on_floor and (can_act or action == "BlockHit")
+	if fire_l and char_data.get("wings", false):
+		fire_l.guard(is_blocking)
+		fire_r.guard(is_blocking)
 	if _pressed("ultimate") and ult_gauge >= 100.0 and on_floor and can_act and ult.can_start():
 		ult_gauge = 0.0
 		ult.start()
@@ -768,8 +774,12 @@ func take_hit(dir: Vector3, heavy: bool, damage := 0.0) -> bool:
 	# บล็อกได้เฉพาะการโจมตีจากด้านหน้า
 	if is_blocking and model.global_basis.z.dot(-dir) > 0.3:
 		var sp: Vector3 = global_position + Vector3.UP * 1.15 - dir * 0.75
-		Vfx.shield(self, sp, -dir, Color(0.55, 0.8, 1.0), 1.5 if heavy else 1.2)
-		Vfx.sparks(self, sp, Color(0.8, 0.92, 1.0), 14, 6.0)
+		var wing_guard: bool = fire_l != null and char_data.get("wings", false)
+		Vfx.shield(self, sp, -dir, Color(1.0, 0.82, 0.35) if wing_guard else Color(0.55, 0.8, 1.0), 1.5 if heavy else 1.2)
+		Vfx.sparks(self, sp, Color(1.0, 0.9, 0.55) if wing_guard else Color(0.8, 0.92, 1.0), 14, 6.0)
+		if wing_guard:
+			fire_l.guard_hit()
+			fire_r.guard_hit()
 		knockback = dir * (3.0 if heavy else 1.2)
 		_start_action("BlockHit")
 		_sfx("block", 0.0, randf_range(0.9, 1.1) * (0.85 if heavy else 1.0))

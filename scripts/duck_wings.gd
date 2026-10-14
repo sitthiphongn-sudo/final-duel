@@ -80,7 +80,7 @@ func _apply() -> void:
 	if _pivot == null:
 		return
 	visible = appear > 0.01
-	var s := (0.6 + 0.4 * appear) * (0.95 + 0.12 * minf(power, 3.0))
+	var s := (0.6 + 0.4 * appear) * (0.95 + 0.12 * minf(power, 3.0)) * ult_scale
 	# กวาดไปหน้า (yaw) + พับขึ้นลง (roll รอบแกนหน้า) ; ปีกซ้าย +X กวาดเข้าหาแกนกลางด้านหน้า
 	var b := Basis(Vector3.UP, deg_to_rad(-side * sweep)) * Basis(Vector3.BACK, deg_to_rad(side * flap))
 	_pivot.basis = b.scaled(Vector3.ONE * s)
@@ -176,6 +176,77 @@ func boost(p := 1.0, style := "swat", hold := 0.4) -> void:
 			_tw.set_parallel(false)
 			_tw.tween_interval(0.07 + 0.04 * minf(p, 3.0))
 			_tw.tween_method(_set_appear, 1.0, 0.0, 0.3 + 0.06 * minf(p, 3.0)).set_trans(Tween.TRANS_SINE)
+
+
+## ตั้งการ์ด: ปีกสองข้างโผล่มาบังหน้าเหมือนโล่ (ค้างจนปล่อยปุ่ม) / hit = ตอนรับแรงปะทะให้วาบ
+var guarding := false
+var ult_scale := 1.0                       ## ขยายปีกตอนอัลติ
+var regal := false
+
+
+func guard(on: bool) -> void:
+	if guarding == on or not is_inside_tree():
+		return
+	guarding = on
+	if _tw and _tw.is_valid():
+		_tw.kill()
+	_tw = create_tween()
+	if on:
+		power = 1.6
+		_tw.set_parallel(true)
+		_tw.tween_method(_set_appear, appear, 1.0, 0.08)
+		_tw.tween_method(_set_flap, flap, 52.0, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_tw.tween_method(_set_sweep, sweep, 64.0, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_tw.set_parallel(false)
+		_tw.tween_callback(func(): _guard_hold = true)
+	else:
+		_guard_hold = false
+		_tw.tween_method(_set_appear, appear, 0.0, 0.18).set_trans(Tween.TRANS_SINE)
+
+
+var _guard_hold := false
+
+
+func guard_hit() -> void:
+	if not guarding:
+		return
+	var k := create_tween()
+	k.tween_method(func(v): power = v; _apply(), 3.2, 1.6, 0.25)
+
+
+## อัลติ: กางปีกใหญ่สง่าๆ กระพือช้าๆ ค้างไว้ (scl = ขนาดปีก, on=false = เก็บปีก)
+func regal_mode(on: bool, scl := 2.0, dur := 0.9) -> void:
+	if not is_inside_tree():
+		return
+	if _tw and _tw.is_valid():
+		_tw.kill()
+	guarding = false
+	_guard_hold = false
+	_tw = create_tween()
+	_tw.set_parallel(true)
+	if on:
+		regal = true
+		power = 2.4
+		_tw.tween_method(_set_appear, appear, 1.0, dur * 0.5)
+		_tw.tween_property(self, "ult_scale", scl, dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		regal = false
+		_tw.tween_method(_set_appear, appear, 0.0, dur)
+		_tw.tween_property(self, "ult_scale", 1.0, dur)
+
+
+func _process(_d: float) -> void:
+	if regal:
+		var t := Time.get_ticks_msec() / 1000.0
+		flap = 52.0 + 26.0 * sin(t * 4.5)
+		sweep = -6.0 + 8.0 * sin(t * 4.5 + 0.6)
+		_apply()
+		return
+	if _guard_hold:
+		var t := Time.get_ticks_msec() / 1000.0
+		flap = 52.0 + 4.0 * sin(t * 9.0 + side)
+		sweep = 64.0 + 3.0 * sin(t * 7.0)
+		_apply()
 
 
 func _cutter_pulse(t: float) -> void:
