@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://characters/crow/crow.glb" id="1_crow"]
+
+[node name="Crow" type="Node3D"]
+
+[node name="Body" parent="." instance=ExtResource("1_crow")]
+transform = Transform3D(0.82, 0, 0, 0, 0.82, 0, 0, 0, 0.82, 0, 0.818, 0)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]

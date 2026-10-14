@@ -160,7 +160,7 @@ func _show_model(id: String) -> void:
 			if rig._skel and d.get("wings", false):
 				for side in [1, -1]:
 					e["fire"].append(GameState.attach_wings(rig, side))
-			elif rig._skel:
+			elif rig._skel and not d.get("sword", false):
 				for side in [1, -1]:
 					var att := BoneAttachment3D.new()
 					att.bone_name = rig._skel.get_bone_name(rig._b(side, "Hand"))
@@ -581,7 +581,7 @@ func _select_char(id: String) -> void:
 		c.queue_free()
 	var d: Dictionary = GameState.data(id)
 	char_detail.add_child(_lbl(d["name"], f_title, 44, C_TEXT, 2))
-	var sub := _lbl("%s   ·   %s   ·   %s" % [d["title"].to_upper(), ("FIRE" if d["element"] == "fire" else "ICE"), d["style"].to_upper()], f_upright, 15, d["color"])
+	var sub := _lbl("%s   ·   %s   ·   %s" % [d["title"].to_upper(), GameState.element_name(d), d["style"].to_upper()], f_upright, 15, d["color"])
 	char_detail.add_child(sub)
 	char_detail.add_child(_spacer(6))
 	var desc := _lbl(d["desc"], FONT_BODY, 13, C_DIM)

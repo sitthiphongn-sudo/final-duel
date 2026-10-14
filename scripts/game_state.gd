@@ -7,7 +7,7 @@ static var p1 := "emberclaw"          ## ตัวที่ผู้เล่น
 static var p2 := "frostfang"          ## คู่ต่อสู้ (บอท)
 static var game_live := true         ## false = ฉากเกมกำลังถูกเตรียมอยู่ใต้หน้า VS (ยังไม่เปิดเสียง/เสียงพูด)
 
-const ORDER := ["emberclaw", "frostfang", "king_duck"]
+const ORDER := ["emberclaw", "frostfang", "king_duck", "karasu"]
 
 ## ฉากต่อสู้ + ชื่อแมพ (แสดงในหน้า VS ตอนโหลด)
 const BATTLE_SCENE := "res://scenes/main.tscn"
@@ -134,6 +134,39 @@ const CHARACTERS := {
 		"physical": [95, 95, 100],
 		"elemental": [50, 50, 80, 125, 100, 90],
 	},
+	"karasu": {
+		"name": "KARASU",
+		"title": "The Midnight Blade",
+		"desc": "A silent crow-ninja who never wastes a motion. Karasu fights with a two-handed katana, cutting crimson arcs through the air in flowing combos, then vanishes into a storm of blinking slashes.",
+		"style": "Swordsman · Mid range",
+		"element": "shadow",
+		"sword": true, "ult_script": "res://scripts/ultimate_crow.gd",
+		"model_scale": 1.0,
+		# คอมโบฟันดาบ: ฟันขวา->ซ้าย -> ฟันกลับ -> เสยขึ้น -> กระโดดหมุนฟัน -> (วาร์ปฟันทิ่ม)
+		"action_len": {"Punch1": 0.40, "Punch2": 0.40, "Punch3": 0.62, "JumpKick": 0.52},
+		"lunge": {"Punch1": 0.9, "Punch2": 1.0, "Punch3": 1.4},
+		"hit_frac": {"Punch1": 0.38, "Punch2": 0.38, "Punch3": 0.44, "JumpKick": 0.50},
+		"walk_glb": "res://lite/characters/crow.tscn",
+		"run_glb": "",
+		"portrait": "res://ui/portrait_karasu.png",
+		"card": "res://ui/card_karasu.png",
+		"vs_l": "res://ui/vs/karasu_l.png", "vs_r": "res://ui/vs/karasu_r.png",
+		"hp": 2000, "atk": 24,
+		"color": Color(0.88, 0.14, 0.18),
+		"vfx_color": Color(1.0, 0.25, 0.22),
+		"hp_color": Color(0.80, 0.10, 0.16),
+		"ex_name": "BLOOD MOON", "ex_color": Color(1.0, 0.2, 0.25),
+		"flipbook": "res://vfx/fire_flipbook_8x8.png",
+		"fire": [Color(1.0, 0.9, 0.9), Color(1.0, 0.25, 0.22), Color(0.6, 0.05, 0.1), Color(1.0, 0.7, 0.7), Color(1.0, 0.3, 0.3)],
+		"abilities": [
+			["J", "×5", "Crescent Slash Chain"],
+			["K", "", "Spinning Dive Cut"],
+			["Q", "", "Shadow Step"],
+			["R", "", "Crimson Moon Slash"],
+		],
+		"physical": [100, 120, 90],
+		"elemental": [60, 60, 100, 100, 120, 95],
+	},
 }
 
 ## ชื่อไอคอนในแผงสถานะ (ui/icons/<name>.png)
@@ -160,12 +193,18 @@ const CONTROLS_KEYS := {
 static func make_rig(d: Dictionary):
 	if d.get("wings", false):
 		return (load("res://scripts/duck_rig.gd") as GDScript).new()
+	if d.get("sword", false):
+		return (load("res://scripts/crow_rig.gd") as GDScript).new()
 	return (load("res://scripts/fighter_rig.gd") as GDScript).new()
 
 
 ## เอฟเฟกต์ที่ "มือ" ของตัวละครที่ใช้ปีกใส (แทนไฟที่มือ) side: 1 = ซ้าย, -1 = ขวา
 static func attach_wings(rig, side: int) -> Node3D:
 	return (load("res://scripts/duck_wings.gd") as GDScript).attach(rig._skel, "Body", side, Vector3(0.12, 0.22, 0.0))
+
+
+static func element_name(d: Dictionary) -> String:
+	return {"fire": "FIRE", "ice": "ICE", "wind": "WIND", "shadow": "SHADOW"}.get(d.get("element", ""), "FIRE")
 
 
 static func data(id: String) -> Dictionary:

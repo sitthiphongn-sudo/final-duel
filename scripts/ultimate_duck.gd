@@ -9,6 +9,7 @@ extends "res://scripts/ultimate.gd"
 
 const Vfx := preload("res://scripts/vfx.gd")
 const GroundImpact := preload("res://scripts/ground_impact.gd")
+const BRAAM_SND := preload("res://sounds/ult_duck_braam.mp3")
 const GOLD := Color(1.0, 0.82, 0.3)
 const GOLD_SOFT := Color(1.0, 0.9, 0.55, 0.9)
 
@@ -39,6 +40,7 @@ func start() -> void:
 	_tw(self, "dim", 0.45, 0.25)
 	_flash(GOLD, 0.5, 0.35)
 	_sfx(SND.hit_heavy, -4.0)
+	_sfx(BRAAM_SND, 0.0)
 
 	var ground_y: float = player.global_position.y
 	var ep: Vector3 = enemy.global_position

@@ -200,6 +200,8 @@ func _build_model(id: String) -> void:
 
 
 func _attach_fire(rig, side: int, d: Dictionary) -> Node3D:
+	if d.get("sword", false):
+		return null
 	if d.get("wings", false):
 		return GameState.attach_wings(rig, side)
 	var skel: Skeleton3D = rig._skel
@@ -560,7 +562,7 @@ func _show_character(instant: bool) -> void:
 	else:
 		name_label.text = d["name"]
 		title_label.text = d["title"]
-		element_label.text = "◆ " + ("FIRE" if d["element"] == "fire" else "ICE")
+		element_label.text = "◆ " + GameState.element_name(d)
 		element_label.add_theme_color_override("font_color", d["color"])
 	_fill_stats(d, id == "random")
 	diamonds[phase - 1].tex = null if id == "random" else load(d["portrait"])

@@ -151,6 +151,24 @@ func on_fighter_ko(loser) -> void:
 
 # ================= พักเกม =================
 
+const PAUSE_FONT := preload("res://fonts/BarlowCondensed-BoldItalic.woff2")
+const PAUSE_ORANGE := Color(1.0, 0.62, 0.12)
+const CHAR_SELECT_SCENE := "res://scenes/character_select.tscn"
+var pause_items: Array = []        ## [{label, bar, id}]
+var pause_sel := 0
+var pause_sub: Label
+
+
+func _pl(text: String, size: int, col: Color) -> Label:
+	var l := Label.new()
+	l.text = text
+	l.add_theme_font_override("font", PAUSE_FONT)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_color", col)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+
 func _build_pause() -> void:
 	pause_layer = CanvasLayer.new()
 	pause_layer.layer = 20
@@ -158,30 +176,85 @@ func _build_pause() -> void:
 	pause_layer.visible = false
 	add_child(pause_layer)
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
+	dim.color = Color(0, 0, 0, 0.30)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pause_layer.add_child(dim)
+	# แผงมืดไล่เฉดจากซ้าย
+	var grad := Gradient.new()
+	grad.set_color(0, Color(0.02, 0.03, 0.06, 0.92))
+	grad.set_color(1, Color(0.02, 0.03, 0.06, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = grad
+	gt.fill_from = Vector2(0, 0)
+	gt.fill_to = Vector2(1, 0)
+	var panel := TextureRect.new()
+	panel.texture = gt
+	panel.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	panel.stretch_mode = TextureRect.STRETCH_SCALE
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.anchor_right = 0.62
+	panel.offset_right = 0.0
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pause_layer.add_child(panel)
 	var box := VBoxContainer.new()
-	box.set_anchors_preset(Control.PRESET_CENTER)
-	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	box.grow_vertical = Control.GROW_DIRECTION_BOTH
-	box.add_theme_constant_override("separation", 12)
+	box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	box.anchor_left = 0.07
+	box.anchor_right = 0.6
+	box.anchor_top = 0.2
+	box.anchor_bottom = 0.95
+	box.offset_left = 0
+	box.offset_right = 0
+	box.offset_top = 0
+	box.offset_bottom = 0
+	box.add_theme_constant_override("separation", 4)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pause_layer.add_child(box)
-	var title := Label.new()
-	title.text = "PAUSED"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 54)
-	title.add_theme_color_override("font_outline_color", Color.BLACK)
-	title.add_theme_constant_override("outline_size", 10)
+	var H := get_viewport().get_visible_rect().size.y
+	var line := ColorRect.new()
+	line.color = PAUSE_ORANGE
+	line.custom_minimum_size = Vector2(54, 4)
+	line.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(line)
+	box.add_child(_pl("GAME PAUSED", int(H * 0.032), PAUSE_ORANGE))
+	var title := _pl("PAUSED", int(H * 0.15), Color.WHITE)
+	title.add_theme_color_override("font_shadow_color", PAUSE_ORANGE)
+	title.add_theme_constant_override("shadow_offset_x", 6)
+	title.add_theme_constant_override("shadow_offset_y", 6)
 	box.add_child(title)
-	for item in [["Resume   (Esc / P)", "resume"], ["Restart Match", "restart"], ["Main Menu   (M)", "menu"]]:
-		var b := Button.new()
-		b.text = item[0]
-		b.custom_minimum_size = Vector2(300, 48)
-		b.add_theme_font_size_override("font_size", 22)
-		b.process_mode = Node.PROCESS_MODE_ALWAYS
-		b.pressed.connect(_pause_action.bind(item[1]))
-		box.add_child(b)
+	pause_sub = _pl("ROUND 1  ·  P1  0 - 0  P2", int(H * 0.03), Color(0.78, 0.8, 0.85))
+	box.add_child(pause_sub)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, H * 0.03)
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(gap)
+	pause_items.clear()
+	for item in [["RESUME", "resume"], ["CHARACTER SELECT", "chars"], ["MAIN MENU", "menu"]]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 16)
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		var bar := ColorRect.new()
+		bar.color = PAUSE_ORANGE
+		bar.custom_minimum_size = Vector2(5, H * 0.065)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(bar)
+		var lab := _pl(item[0], int(H * 0.08), Color.WHITE)
+		row.add_child(lab)
+		var idx := pause_items.size()
+		row.mouse_entered.connect(func(): pause_select(idx))
+		row.gui_input.connect(func(ev: InputEvent):
+			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+				pause_select(idx)
+				_pause_action(item[1]))
+		box.add_child(row)
+		pause_items.append({"label": lab, "bar": bar, "id": item[1]})
+	var sp := Control.new()
+	sp.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(sp)
+	box.add_child(_pl("W / S · UP / DOWN select     ENTER / J / NUM1 confirm     or click", int(H * 0.026), Color(0.62, 0.64, 0.7)))
+	pause_select(0)
 	# ปุ่ม II มุมขวาบน ไว้กดด้วยเมาส์ (เผื่อเว็บที่ Esc ถูกเบราว์เซอร์ใช้)
 	var pb := Button.new()
 	pb.text = "II"
@@ -207,16 +280,44 @@ func _pause_action(what: String) -> void:
 	match what:
 		"resume":
 			toggle_pause()
-		"restart":
+		"chars":
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 			get_tree().paused = false
 			Engine.time_scale = 1.0
-			get_tree().reload_current_scene()
+			get_tree().change_scene_to_file(CHAR_SELECT_SCENE)
 		"menu":
 			to_menu()
 
 
+func pause_select(i: int) -> void:
+	if pause_items.is_empty():
+		return
+	pause_sel = posmod(i, pause_items.size())
+	for k in pause_items.size():
+		var on := k == pause_sel
+		var it: Dictionary = pause_items[k]
+		(it.label as Label).add_theme_color_override("font_color", PAUSE_ORANGE if on else Color.WHITE)
+		(it.bar as ColorRect).modulate.a = 1.0 if on else 0.0
+
+
+func pause_confirm() -> void:
+	if not pause_items.is_empty():
+		_pause_action(pause_items[pause_sel].id)
+
+
+var _mouse_before := Input.MOUSE_MODE_VISIBLE
+
+
 func toggle_pause() -> void:
 	var p := not get_tree().paused
+	if p:
+		_mouse_before = Input.mouse_mode
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE      # เปิดเคอร์เซอร์ให้คลิกเมนูได้ (ในเกมเมาส์ถูกล็อกอยู่)
+	else:
+		Input.mouse_mode = _mouse_before
+	if p and pause_sub:
+		pause_sub.text = "ROUND %d  ·  P1  %d - %d  P2" % [wins[1] + wins[2] + 1, wins[1], wins[2]]
+		pause_select(0)
 	get_tree().paused = p
 	pause_layer.visible = p
 	if pause_btn_layer:
@@ -225,6 +326,7 @@ func toggle_pause() -> void:
 
 
 func to_menu() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	get_tree().change_scene_to_file(menu_scene)
@@ -273,5 +375,13 @@ class PauseInput extends Node:
 			main.toggle_pause()
 		elif event.keycode == KEY_F3:
 			main.toggle_fps()
-		elif event.keycode == KEY_M and main.get_tree().paused:
+		elif not main.get_tree().paused:
+			return
+		elif event.keycode == KEY_M:
 			main.to_menu()
+		elif event.keycode in [KEY_W, KEY_UP]:
+			main.pause_select(main.pause_sel - 1)
+		elif event.keycode in [KEY_S, KEY_DOWN]:
+			main.pause_select(main.pause_sel + 1)
+		elif event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_J, KEY_KP_1]:
+			main.pause_confirm()

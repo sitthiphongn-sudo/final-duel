@@ -242,6 +242,8 @@ func _make_fighter(id: String, parent: Node3D) -> Node3D:
 
 
 func _attach_fire(rig, side: int, d: Dictionary) -> void:
+	if d.get("sword", false):
+		return
 	if d.get("wings", false):
 		GameState.attach_wings(rig, side)
 		return

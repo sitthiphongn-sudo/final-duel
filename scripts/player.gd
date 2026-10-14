@@ -165,6 +165,8 @@ const HandFire := preload("res://scripts/hand_fire.gd")
 const Ultimate := preload("res://scripts/ultimate.gd")
 const Voice := preload("res://scripts/voice.gd")
 const Vfx := preload("res://scripts/vfx.gd")
+const CrowSlash := preload("res://scripts/crow_slash.gd")
+var is_sword := false         ## ตัวละครสายดาบ (กาจอมยุทธ์): ฟันด้วยดาบสองมือ + เส้นฟันการ์ตูน
 var rig
 var anim_player: AnimationPlayer
 var walk_anim := ""
@@ -242,6 +244,7 @@ func _ready() -> void:
 	pfx = "p%d_" % player_index
 	char_id = GameState.p1 if player_index == 1 else GameState.p2
 	char_data = GameState.data(char_id)
+	is_sword = bool(char_data.get("sword", false))
 	alen = ACTION_LEN.duplicate()
 	alen.merge(char_data.get("action_len", {}), true)
 	lunge_t = LUNGE.duplicate()
@@ -303,7 +306,7 @@ func _ready() -> void:
 	ult.setup(self)
 	if ult_start_full:
 		ult_gauge = 100.0
-	if hand_fire and rig._skel:
+	if hand_fire and rig._skel and not is_sword:
 		fire_l = _attach_fire(1)
 		fire_r = _attach_fire(-1)
 	_play("FightIdle", 0.0)
@@ -662,6 +665,9 @@ func _start_action(a: String) -> void:
 	hit2_done = false
 	if a in hitf:
 		_punch_vfx(a)
+	if is_sword and a in hitf:
+		rig.draw_blade(float(alen[a]) + 0.15)
+		_slash_vfx(a)
 	if a in hitf and fire_l and char_data.get("wings", false):
 		_wing_fx(a)
 	elif a in hitf and fire_l:
@@ -696,6 +702,10 @@ func _wing_fx(a: String) -> void:
 func _play(anim_name: String, blend: float, speed := 1.0, restart := false) -> void:
 	if anim_player == null or anim_name == "" or not anim_player.has_animation(anim_name):
 		return
+	if is_sword and restart and anim_name in ["AirPunch1", "AirPunch2", "UltStrike", "UltWindup"]:
+		rig.draw_blade(maxf(0.5, anim_player.get_animation(anim_name).length / maxf(speed, 0.1)) + 0.1)
+		if anim_name.begins_with("AirPunch"):
+			_slash_vfx(anim_name)
 	if restart or anim_player.assigned_animation != anim_name or not anim_player.is_playing() and anim_player.get_animation(anim_name).loop_mode != Animation.LOOP_NONE:
 		anim_player.play(anim_name, blend, speed)
 		if restart:
@@ -1149,9 +1159,43 @@ func _rush_warp(e, i: int) -> void:
 	Vfx.sparks(self, old + Vector3.UP * 1.0, vfx_color, 5, 3.0)
 	Vfx.speed_lines(self, old + Vector3.UP * 1.0, c, Color(1, 1, 1, 0.8), 8, 0.5, 0.03, 0.2)
 	_sfx("whoosh_light", -6.0, randf_range(1.15, 1.45))
+	if is_sword:
+		_sword_ghost_cuts(e, i)
 	if char_data.get("wings", false):
 		hit_done = true                              # เป็ดใช้ชุดวาปหลายจุดแทนหมัดเดียว
 		_duck_warp_flurry(e, i)
+
+
+## KARASU: คอมโบลอยอากาศ — ตัวหายไป เหลือแต่เส้นดาบบางๆ ฟันรัวรอบศัตรู
+var ghost_tick := 0
+func _sword_ghost_cuts(e, i: int) -> void:
+	ghost_tick += 1
+	var my_tick := ghost_tick
+	model.visible = false
+	var cdir := Vector3.RIGHT
+	var cam := get_viewport().get_camera_3d()
+	if cam:
+		cdir = cam.global_position - e.global_position
+		cdir.y = 0.0
+		cdir = cdir.normalized() if cdir.length() > 0.01 else Vector3.RIGHT
+	var zb := cdir.cross(Vector3.UP).normalized()
+	var chest: Vector3 = e.global_position + Vector3.UP * 1.0
+	for k in 3:
+		if not is_instance_valid(e) or my_tick != ghost_tick:
+			return
+		var sgn := 1.0 if (i + k) % 2 == 0 else -1.0
+		var bb := deg_to_rad(sgn * randf_range(30.0, 75.0))
+		var rr := 6.0
+		var cen := -rr * Vector3(0.0, sin(bb), cos(bb))
+		var off := Vector3(randf_range(-0.2, 0.2), randf_range(-0.25, 0.25), randf_range(-0.2, 0.2))
+		var xfc := Transform3D(Basis(cdir, Vector3.UP, zb), chest + off)
+		CrowSlash.arc(self, xfc, rad_to_deg(bb) - 24.0, rad_to_deg(bb) + 24.0, rr, 0.09, 1, cen, 0.0, 1.0, 0.05)
+		Vfx.sparks(self, chest + off, vfx_color, 6, 4.0)
+		Vfx.sparks(self, chest + off, Color.WHITE, 3, 3.0)
+		await get_tree().create_timer(0.045, true, false, true).timeout
+	await get_tree().create_timer(0.6, true, false, true).timeout
+	if is_instance_valid(self) and my_tick == ghost_tick:
+		model.visible = true
 
 
 ## เป็ดราชา (สไตล์ดราก้อนบอล): ตีศัตรูกระเด็นไกล -> หายตัววาปตามไปดักหน้าอีกฝั่ง -> ตีส่งกลับ (3 จุด)
@@ -1492,7 +1536,7 @@ func _attach_fire(side: int) -> Node3D:
 
 ## ลมกระจายตอนออกหมัด/เตะ (ออกจากกำปั้นหรือเท้าที่ใช้)
 func _punch_vfx(a: String) -> void:
-	if rig == null or rig._skel == null:
+	if rig == null or rig._skel == null or is_sword:
 		return
 	var side := 1 if a == "Punch1" else -1
 	var bone := "Hand"
@@ -1505,6 +1549,47 @@ func _punch_vfx(a: String) -> void:
 	fwd = fwd.normalized()
 	Vfx.puff(self, pos + fwd * 0.2, fwd, wind_color, 5, 5.0, 0.22, 0.14, 25.0)
 	Vfx.ring(self, pos + fwd * 0.35, fwd, Color(wind_color.r, wind_color.g, wind_color.b, 0.35), 0.12, 0.65, 0.18)
+
+
+## เส้นฟันการ์ตูนของกาจอมยุทธ์ (เสี้ยวพระจันทร์สีแดง-ขาว) ปรากฏก่อนดาบถึงเป้านิดหน่อย
+func _slash_vfx(a: String) -> void:
+	var delay := 0.0
+	if a in hitf and a in alen:
+		delay = maxf(0.0, float(hitf[a]) * float(alen[a]) - 0.07)
+	var pl := self
+	var do_it := func():
+		if not is_instance_valid(pl) or pl.model == null:
+			return
+		var xf: Transform3D = pl.model.global_transform
+		xf.basis = xf.basis.orthonormalized()
+		match a:
+			"Punch1":
+				CrowSlash.arc(pl, xf, -80.0, 85.0, 1.4, 0.10, 0, Vector3(0, 1.0, 0.05), 38.0)
+			"AirPunch1":
+				# ฟันไขว้ 2 เส้นรัว
+				CrowSlash.arc(pl, xf, -80.0, 85.0, 1.4, 0.10, 0, Vector3(0, 1.0, 0.05), 38.0)
+				get_tree().create_timer(0.07).timeout.connect(func():
+					if is_instance_valid(pl) and pl.model:
+						var x2: Transform3D = pl.model.global_transform
+						x2.basis = x2.basis.orthonormalized()
+						CrowSlash.arc(pl, x2, 85.0, -80.0, 1.4, 0.10, 0, Vector3(0, 1.0, 0.05), -38.0))
+			"AirPunch2":
+				CrowSlash.arc(pl, xf, 125.0, -20.0, 1.7, 0.11, 1, Vector3(0, 1.0, 0.0), 26.0)
+				get_tree().create_timer(0.07).timeout.connect(func():
+					if is_instance_valid(pl) and pl.model:
+						var x2: Transform3D = pl.model.global_transform
+						x2.basis = x2.basis.orthonormalized()
+						CrowSlash.arc(pl, x2, 125.0, -20.0, 1.7, 0.10, 1, Vector3(0, 1.0, 0.0), -26.0))
+			"Punch2":
+				CrowSlash.arc(pl, xf, 125.0, -20.0, 1.7, 0.11, 1, Vector3(0, 1.0, 0.0), 26.0)
+			"Punch3":
+				CrowSlash.arc(pl, xf, -170.0, 170.0, 1.5, 0.12, 0, Vector3(0, 0.95, 0.0), 24.0)
+			"JumpKick":
+				CrowSlash.arc(pl, xf, 115.0, 65.0, 5.0, 0.10, 1, Vector3(0, -3.9, 0.6), 0.0)
+	if delay <= 0.01:
+		do_it.call()
+	else:
+		get_tree().create_timer(delay).timeout.connect(do_it)
 
 
 ## เสียเลือด (0 = แพ้ยกนี้ -> ฉากหลักประกาศผู้ชนะแล้วเริ่มยกใหม่)

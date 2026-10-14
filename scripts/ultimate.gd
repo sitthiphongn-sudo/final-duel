@@ -468,7 +468,7 @@ func _tw(obj: Object, prop: String, value, dur: float, ease := Tween.EASE_OUT, t
 
 
 func _wait(sec: float, _real := true) -> Signal:
-	return get_tree().create_timer(sec, true, false, true).timeout
+	return get_tree().create_timer(sec, false, false, true).timeout
 
 
 func _flash(col: Color, strength: float, dur: float) -> void:
@@ -511,7 +511,7 @@ func _build_ui() -> void:
 
 func _update_ui() -> void:
 	var vs := get_viewport().get_visible_rect().size
-	var bh := vs.y * 0.12 * letterbox
+	var bh := 0.0   # ไม่มีแถบดำบนล่างตอนอัลติ
 	bar_top.position = Vector2.ZERO
 	bar_top.size = Vector2(vs.x, bh)
 	bar_bot.position = Vector2(0, vs.y - bh)
