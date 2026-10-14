@@ -123,54 +123,72 @@ func _build_legend() -> void:
 		var panel := PanelContainer.new()
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.05, 0.05, 0.08, 0.62)
-		sb.set_corner_radius_all(10)
-		sb.set_content_margin_all(8)
+		sb.bg_color = Color(0.05, 0.05, 0.08, 0.18)
+		sb.set_corner_radius_all(8)
+		sb.set_content_margin_all(5)
 		panel.add_theme_stylebox_override("panel", sb)
 		var grid := GridContainer.new()
 		grid.columns = 3
-		grid.add_theme_constant_override("h_separation", 18)
-		grid.add_theme_constant_override("v_separation", 5)
+		grid.add_theme_constant_override("h_separation", 12)
+		grid.add_theme_constant_override("v_separation", 2)
 		grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		panel.add_child(grid)
 		for row in GameState.CONTROLS_KEYS[i]:
 			var cell := HBoxContainer.new()
-			cell.add_theme_constant_override("separation", 3)
+			cell.add_theme_constant_override("separation", 2)
 			cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			for k in row[0]:
 				cell.add_child(_keycap(k))
-			var d := _label(" " + row[1], 13, Color(1, 1, 1, 0.92), 4)
+			var d := _label(" " + row[1], 10, Color(1, 1, 1, 0.85), 3)
 			cell.add_child(d)
 			grid.add_child(cell)
 		hint_box.add_child(panel)
 		panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT if i == 1 else Control.PRESET_BOTTOM_RIGHT)
 		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 		panel.grow_horizontal = Control.GROW_DIRECTION_END if i == 1 else Control.GROW_DIRECTION_BEGIN
-		panel.offset_left = 12.0 if i == 1 else -12.0
+		panel.offset_left = 8.0 if i == 1 else -8.0
 		panel.offset_right = panel.offset_left
-		panel.offset_top = -10.0
-		panel.offset_bottom = -10.0
+		panel.offset_top = -6.0
+		panel.offset_bottom = -6.0
+		panel.resized.connect(_clamp_legend.bind(panel))
+		_clamp_legend.call_deferred(panel)
+	hint_box.modulate.a = 0.7
 	var ht := create_tween()
 	ht.tween_interval(10.0)
-	ht.tween_property(hint_box, "modulate:a", 0.4, 1.5)
+	ht.tween_property(hint_box, "modulate:a", 0.3, 1.5)
+
+
+## กันแถบปุ่มหลุดขอบจอ (จอเล็ก/ฟอนต์กว้าง)
+func _clamp_legend(panel: Control) -> void:
+	if not is_instance_valid(panel) or not panel.is_inside_tree():
+		return
+	var vp := panel.get_viewport_rect().size
+	var r := panel.get_global_rect()
+	var dx := 0.0
+	if r.end.x > vp.x - 6.0:
+		dx = (vp.x - 6.0) - r.end.x
+	if r.position.x + dx < 6.0:
+		dx = 6.0 - r.position.x
+	if absf(dx) > 0.5:
+		panel.position.x += dx
 
 
 func _keycap(txt: String) -> PanelContainer:
 	var pc := PanelContainer.new()
 	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.93, 0.93, 0.96)
-	sb.border_color = Color(0.55, 0.57, 0.65)
-	sb.border_width_bottom = 3
-	sb.set_corner_radius_all(5)
-	sb.content_margin_left = 6
-	sb.content_margin_right = 6
-	sb.content_margin_top = 1
-	sb.content_margin_bottom = 1
+	sb.bg_color = Color(0.93, 0.93, 0.96, 0.55)
+	sb.border_color = Color(0.55, 0.57, 0.65, 0.55)
+	sb.border_width_bottom = 2
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 4
+	sb.content_margin_right = 4
+	sb.content_margin_top = 0
+	sb.content_margin_bottom = 0
 	pc.add_theme_stylebox_override("panel", sb)
 	var l := Label.new()
 	l.text = txt
-	l.add_theme_font_size_override("font_size", 13)
+	l.add_theme_font_size_override("font_size", 10)
 	l.add_theme_color_override("font_color", Color(0.12, 0.12, 0.18))
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pc.add_child(l)
