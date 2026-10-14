@@ -518,7 +518,7 @@ func _update_ui() -> void:
 	bar_bot.size = Vector2(vs.x, bh)
 	dim_rect.position = Vector2.ZERO
 	dim_rect.size = vs
-	dim_rect.color = Color(0.05, 0.0, 0.0, dim)
+	dim_rect.color = Color(0.05, 0.0, 0.0, dim * 0.4)
 	flash_rect.position = Vector2.ZERO
 	flash_rect.size = vs
 	flash_rect.color = Color(flash_color.r, flash_color.g, flash_color.b, flash)

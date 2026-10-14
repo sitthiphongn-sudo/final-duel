@@ -39,7 +39,7 @@ extends CharacterBody3D
 @export var ult_start_full := false     ## เริ่มเกมมาเกจเต็มเลย (ไว้ลองท่า) ปิด = ต้องตีก่อนเกจถึงจะขึ้น
 @export var ult_gain_hit := 9.0         ## เกจที่ได้เมื่อต่อยโดน
 @export var ult_gain_heavy := 14.0      ## เกจที่ได้เมื่อหมัด 3 / เตะโดน
-@export var ult_gain_hurt := 6.0        ## เกจที่ได้เมื่อโดนต่อย
+@export var ult_gain_hurt := 0.0        ## เกจที่ได้เมื่อโดนต่อย
 
 @export_group("Hand Fire")
 @export var hand_fire := true

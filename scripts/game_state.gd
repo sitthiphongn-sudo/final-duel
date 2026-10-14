@@ -11,13 +11,14 @@ const ORDER := ["emberclaw", "frostfang", "king_duck"]
 
 ## ฉากต่อสู้ + ชื่อแมพ (แสดงในหน้า VS ตอนโหลด)
 const BATTLE_SCENE := "res://scenes/main.tscn"
-const MAP_NAME := "Skyborne Ruins"
-const MAP_BG := "res://ui/vs/bg_skyborne.jpg"
+static var map_id := 0                ## แมพที่เลือก (index ใน MAPS) — เลือกได้ที่เมนู MAPS
 
 ## ข้อมูลแมพ (หน้า MAPS ในเมนู)
 const MAPS := [
 	{
 		"name": "SKYBORNE RUINS",
+		"title": "Skyborne Ruins",
+		"scene": "",
 		"image": "res://ui/vs/bg_skyborne.jpg",
 		"location": "Floating isles above the Cloud Sea",
 		"mode": "1v1 Duel",
@@ -26,7 +27,22 @@ const MAPS := [
 		"hazards": "Open edges · Fall and you respawn",
 		"desc": "An ancient temple ring that drifted into the sky long ago. Broken pillars circle a carved seal where the guardians settle their duels, high above an endless sea of clouds.",
 	},
+	{
+		"name": "COLOSSEUM YARD",
+		"title": "Colosseum Yard",
+		"scene": "res://scripts/mini_arena_map.gd",
+		"image": "res://ui/vs/bg_colosseum.jpg",
+		"location": "A walled training yard of the old colosseum",
+		"mode": "1v1 Duel",
+		"size": "Medium · Circular sand-stone arena",
+		"time": "Bright noon",
+		"hazards": "Closed walls · Smash foes into the stone",
+		"desc": "Banners snap in the wind above a low stone wall. Statues watch from the stands while two fighters settle things on worn flagstones. Low-poly art by Kenney (CC0).",
+	},
 ]
+
+static func map() -> Dictionary:
+	return MAPS[clampi(map_id, 0, MAPS.size() - 1)]
 
 const CHARACTERS := {
 	"emberclaw": {

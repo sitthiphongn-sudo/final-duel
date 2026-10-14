@@ -26,6 +26,7 @@ const CREDITS := [
 	["GAME DESIGN & DEVELOPMENT", ["Phurin Srithan", "Sitthiphong Nakhonkhwang", "Kittinan Khaiphraiwan"]],
 	["ENGINE", ["Godot Engine 4.7  (MIT License)"]],
 	["3D CHARACTERS & ARENA", ["Emberclaw, Frostfang, Skyborne Ruins", "Generated with Meshy AI"]],
+	["COLOSSEUM YARD MAP", ["Kenney Mini Arena (CC0) · kenney.nl", "Assembled in-game from its pieces"]],
 	["PROGRAMMING ASSISTANCE", ["Claude by Anthropic"]],
 	["JAPANESE VOICE", ["VOICEVOX"]],
 	["MUSIC", ["\"s_b\" — provided by the developer"]],
@@ -645,22 +646,20 @@ func _panel_maps() -> void:
 	var list := VBoxContainer.new()
 	list.add_theme_constant_override("separation", 10)
 	hb.add_child(list)
-	var m: Dictionary = GameState.MAPS[0]
-	var c := ThumbCard.new()
-	c.custom_minimum_size = Vector2(150, 90)
-	c.tex = load(m["image"])
-	c.caption = m["name"]
-	c.font = f_title
-	c.accent = C_ORANGE
-	c.selected = true
-	list.add_child(c)
-	var soon := ThumbCard.new()
-	soon.custom_minimum_size = Vector2(150, 90)
-	soon.caption = "COMING SOON"
-	soon.font = f_title
-	soon.accent = Color(0.5, 0.5, 0.55)
-	soon.locked = true
-	list.add_child(soon)
+	var m: Dictionary = GameState.map()
+	for mi in GameState.MAPS.size():
+		var mm: Dictionary = GameState.MAPS[mi]
+		var c := ThumbCard.new()
+		c.custom_minimum_size = Vector2(150, 90)
+		c.tex = load(mm["image"])
+		c.caption = mm["name"]
+		c.font = f_title
+		c.accent = C_ORANGE
+		c.selected = mi == GameState.map_id
+		c.clicked.connect(func():
+			GameState.map_id = mi
+			_open_panel("maps"))
+		list.add_child(c)
 
 	var sc := ScrollContainer.new()
 	sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL

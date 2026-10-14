@@ -43,12 +43,15 @@ func _ready() -> void:
 		else:
 			started.connect(music_player.play, CONNECT_ONE_SHOT)   # รอหน้า VS จางออกก่อนค่อยเปิดเพลง
 	var t := Time.get_ticks_msec()
+	_swap_map()
 	var map := $Map
 	var baked := map.has_node("Collision")     # แมพเวอร์ชันเบามี collision ทำไว้แล้ว
 	for mi in map.find_children("*", "MeshInstance3D", true, false):
 		var m := mi as MeshInstance3D
 		if not baked:
 			m.create_trimesh_collision()
+		if map.has_meta("keep_colors"):
+			continue                               # แมพที่ใช้สีเดิมของโมเดล (ไม่ย้อมมืด)
 		for i in m.mesh.get_surface_count():
 			var mat := m.get_active_material(i)
 			if mat is BaseMaterial3D:
@@ -67,6 +70,21 @@ func _ready() -> void:
 	print("เตรียมแมพเสร็จใน %d ms (กราฟิก %s)" % [Time.get_ticks_msec() - t, GameState.GFX_NAMES[GameState.gfx]])
 	_build_pause()
 	_build_fps()
+
+
+## แมพที่เลือกในเมนู (ถ้าไม่ใช่แมพเริ่มต้น -> เอาแมพ Skyborne ออกแล้วสร้างแมพใหม่แทน)
+func _swap_map() -> void:
+	var path: String = GameState.map()["scene"]
+	if path == "":
+		return
+	var old := $Map
+	old.name = "OldMap"
+	var nm: Node3D = (load(path) as GDScript).new()
+	nm.name = "Map"
+	nm.position.y = arena_floor_y
+	add_child(nm)
+	move_child(nm, old.get_index())
+	old.queue_free()
 
 
 ## พื้นเรียบล่องหน (เลเยอร์ 3) ให้ตัวละครเดิน: collision แมพที่ลดรายละเอียดมีรอยต่อ/หลุมเล็กๆ ทำให้เดินสะดุด

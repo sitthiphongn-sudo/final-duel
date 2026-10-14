@@ -75,7 +75,7 @@ func _build() -> void:
 	bg = TextureRect.new()
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	bg.texture = load(GameState.MAP_BG)
+	bg.texture = load(GameState.map()["image"])
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.modulate = Color(0.95, 0.98, 1.0)
 	ov.add_child(bg)
@@ -168,7 +168,7 @@ func _build() -> void:
 
 	# ---- แถบชื่อแมพ ----
 	map_bar = MapBar.new()
-	map_bar.text = GameState.MAP_NAME
+	map_bar.text = GameState.map()["title"]
 	map_bar.font = FONT_FILE
 	map_bar.position = Vector2(BASE.x * 0.5 - 150, 556)
 	map_bar.size = Vector2(300, 28)

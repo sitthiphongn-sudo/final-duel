@@ -21,7 +21,7 @@ const OFF_X := {"hp": 0.0, "st": 129.0, "ex": 200.0}
 const OFF_Y := {"hp": 0.0, "st": 140.0, "ex": 232.0}
 
 const EX_SHOW_TIME := 2.0                 ## เกจอัลติโชว์ค้างกี่วินาทีหลังตีโดน
-const EX_KEEP_WHEN_FULL := true            ## เกจเต็ม = โชว์ค้าง (ตั้ง false ถ้าอยากซ่อนตลอด)
+const EX_KEEP_WHEN_FULL := false           ## เกจเต็ม = โชว์ค้าง (ตั้ง false ถ้าอยากซ่อนตลอด)
 const UI_SCALE := 0.40                    ## ย่อกรอบลงมาให้พอดีจอ
 const POR := 84.0                         ## ขนาดรูปตัวละคร
 const GROUP_X := 92.0                    ## กรอบหลอดเริ่มถัดจากรูป
@@ -385,7 +385,7 @@ func _update_side(side: String, ch) -> void:
 	ex_fill[side].scale.x = clampf(ch.ult_gauge / 100.0, 0.0, 1.0)
 	# เกจอัลติโผล่เฉพาะฝั่งที่กำลังตี (เกจเพิ่ม) แล้วจางหาย / ถ้าเต็มจะค้างไว้ให้รู้ว่ากดอัลติได้
 	var dt := get_process_delta_time()
-	if ch.ult_gauge > ex_prev[side] + 0.01:
+	if ch.ult_gauge > ex_prev[side] + 0.01 and combo_owner == int(ch.player_index) and combo > 0:
 		ex_hold[side] = EX_SHOW_TIME
 	ex_prev[side] = ch.ult_gauge
 	ex_hold[side] = maxf(0.0, ex_hold[side] - dt)
